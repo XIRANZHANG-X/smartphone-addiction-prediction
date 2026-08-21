@@ -10,15 +10,16 @@ data/interim/
 data/processed/
 
 # ============================================================
-# 契约产物：OOF 预测每个约 5.5MB，16 个模型合计近 90MB，不进 git
-# 这些文件由 R/ 下的脚本确定性重建（folds.rds 固定 seed）
+# output/ 默认整个忽略：中间产物动辄几十 MB，且全部可由脚本确定性重建。
+# 只有两个冻结常量例外 —— 它们是全组分数可比的基础，必须进 git。
 # ============================================================
-output/oof/*.rds
-output/test/*.rds
-output/models/
+output/*
+!output/folds.rds
+!output/subsample_200k.rds
 
 # 提交文件本体不进 git，但 submissions/log.csv（分数台账）要进
 submissions/*.csv
+!submissions/log.csv
 
 # ============================================================
 # R / RStudio

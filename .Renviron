@@ -1,0 +1,5 @@
+# 包库钉在 D 盘，避免 R 默认写入 C:\Users\Lenovo\AppData\Local\R
+R_LIBS_USER=D:/R/win-library/4.6
+
+# data.table 线程数不在这里设：环境变量只接受 >=1 的整数，
+# 而"用满所有核"要在 R 里写 setDTthreads(0L)。保持默认（一半核心）即可。

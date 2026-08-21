@@ -1,0 +1,2 @@
+date,submission_file,method,cv_auc,cv_sd,lb_public,notes
+2026-08-21,,L1_xgboost_tierA,0.95910,0.00130,,基线：原生 NaN + xgboost，Tier A 200k

@@ -1,0 +1,10 @@
+* text=auto
+*.R      text eol=lf
+*.md     text eol=lf
+*.Rmd    text eol=lf
+*.qmd    text eol=lf
+*.csv    text eol=lf
+*.rds    binary
+*.png    binary
+*.pptx   binary
+*.xlsx   binary
