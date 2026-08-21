@@ -2,3 +2,5 @@ date,submission_file,method,cv_auc,cv_sd,lb_public,notes
 2026-08-21,,L1_xgboost_tierA,0.95910,0.00130,,基线：原生 NaN + xgboost，Tier A 200k
 2026-08-21,,L2_xgboost_tierA,0.95871,0.00132,,中位数填补；配对检验 L1-L2 p=0.0231
 2026-08-21,,L3_xgboost_tierA,0.95804,0.00128,,约束插补；三条线最差，L1-L3 p=0.0020（5/5 折同号）
+2026-08-21,,L2_glmnet_tierA,0.91775,0.00151,,中位数填补 + elastic net
+2026-08-21,,L3_glmnet_tierA,0.92841,0.00128,,约束插补 + elastic net；L3-L2 +0.01065 t=69.8 p<0.0001（5/5 同号）
