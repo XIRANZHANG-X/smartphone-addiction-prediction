@@ -1,0 +1,22 @@
+Your Goal: Predicting smartphone addiction.
+
+Evaluation
+Submissions are evaluated on area under the ROC curve between the predicted probability and the observed target.
+
+Submission File
+For each id in the test set, you must predict a probability for the variable. The file should contain a header and have the following format:addicted_label
+
+id,addicted_label
+691369,0.2
+691370,0.3
+691371,0.1
+etc.
+
+
+Dataset Description
+The dataset for this competition (both train and test) was inspired by the Smartphone Addiction Prediction Dataset.
+
+Files
+train.csv - the training set, with addicted_label as target
+test.csv - the test set, used to predict the probability for addicted_label
+sample_submission.csv - a sample submission file in the correct format

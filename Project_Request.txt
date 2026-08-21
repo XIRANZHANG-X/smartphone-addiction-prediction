@@ -1,0 +1,41 @@
+## What To Submit and Present
+
+- 1. Source codes (well-commented) and data
+
+- 2. Detailed instructions: how to re-produce your results (including additional R packages that you installed).
+
+- 3. Presentation slides: 12 min each group (At least 5 students from each group should present); Slides will be presented on 8 Sep.
+
+- Pls send me your materials by 6 Sep 2026, 11:59 p.m. (Sunday midnight).
+
+## Suggested content for presentation slides
+
+- Problem Statement
+
+- Data Description
+
+- Methodology and Implementation
+
+- Experimental Results
+
+- Feature study
+
+- Analysis and discussions, comparison using multiple models
+
+- Interesting findings
+
+- Conclusions
+
+- Summary of project achievements and findings
+
+- Future Directions for improvements
+
+## Group Project Evaluation Criteria
+
+- Interestingness and deep understanding of your problem statement (20%)
+
+- Technical depth, novelty of methods, and technical comparison between different methods/parameters(30%)
+
+- Richness of the insights and findings that you have gained from this exercise (30%)
+
+- Clarity of your presentation (20%)
