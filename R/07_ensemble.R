@@ -33,7 +33,12 @@ dir_test <- "output/test"
 # 只需一次排序，快两个数量级，结果与 pROC 完全一致。
 fast_auc <- function(y, p) {
   r <- rank(p, ties.method = "average")
-  n1 <- sum(y == 1); n0 <- length(y) - n1
+  # as.numeric 不能省：sum(y == 1) 返回**整型**，而全量上 n1 = 490,474、
+  # n0 = 200,895，n1 * n0 ≈ 9.85e10 远超 32 位整型上限，
+  # 整型乘法会直接产生 NA（只给一条 warning，很容易被淹没在日志里）。
+  # 这和 04_folds.R 里踩过的是同一类坑。
+  n1 <- as.numeric(sum(y == 1))
+  n0 <- as.numeric(length(y)) - n1
   if (n1 == 0 || n0 == 0) return(NA_real_)
   (sum(r[y == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
 }

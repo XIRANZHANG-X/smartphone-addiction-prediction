@@ -40,12 +40,31 @@ tbl <- rbindlist(lapply(metas, function(f) {
 cat("======================================================\n")
 cat("  Tier A 排名\n")
 cat("======================================================\n")
+
+# ---- 候选选择：先保多样性，再补分数 -----------------------------------------
+# 早期版本单纯按 AUC 取前 N，结果选出来 5 个全是 GBDT，
+# 实测它们之间的**秩相关高达 0.991~0.996** —— 几乎是同一个模型的五个副本。
+# 集成的收益来自成员之间的**差异**，把五个雷同的模型平均起来提升极其有限。
+#
+# 现在的做法：每个算法家族先各出一个最好的（保证 xgboost / lightgbm /
+# ranger / glmnet 都有代表），剩余名额再按 AUC 补。
+# ranger 和 glmnet 单看分数低得多，但它们犯的错和 GBDT 不是同一批，
+# 这种「不相关的错误」正是集成需要的。
+tbl[, algo := sub("^L[0-9]+_", "", model)]
+best_per_algo <- tbl[, .SD[which.max(tierA)], by = algo]$model
+
+cand <- unique(c(best_per_algo,
+                 tbl$model[order(-tbl$tierA)]))[seq_len(min(TOP_N, nrow(tbl)))]
+cand <- cand[!is.na(cand)]
+
 for (i in seq_len(nrow(tbl))) {
   cat(sprintf("  %2d. %-16s %.5f ± %.5f%s\n", i, tbl$model[i],
-              tbl$tierA[i], tbl$sd[i], if (i <= TOP_N) "   <- 入选" else ""))
+              tbl$tierA[i], tbl$sd[i],
+              if (tbl$model[i] %in% cand) "   <- 入选" else ""))
 }
 
-cand <- tbl$model[seq_len(min(TOP_N, nrow(tbl)))]
+cat(sprintf("\n候选选择：每个算法家族各取最好的一个（%s），再按 AUC 补足到 %d 个\n",
+            paste(best_per_algo, collapse = "、"), TOP_N))
 
 cat(sprintf("\n将在全量 691,369 行上重训 %d 个候选\n", length(cand)))
 cat("======================================================\n\n")

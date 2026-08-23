@@ -77,14 +77,17 @@ cat("CV 和 LB 的对应关系是我们判断本地验证是否可信的唯一�
 # 追加一行到台账
 log_f <- file.path(dir_sub, "log.csv")
 if (file.exists(log_f)) {
-  log_dt <- fread(log_f)
+  # colClasses = "character"：fread 会把 date 列自动识别成 IDate，
+  # 和我们要追加的字符型日期对不上，rbindlist 会把它填成空值 ——
+  # 结果台账里新记录没有日期，而且不报错。全部按字符读最省事。
+  log_dt <- fread(log_f, colClasses = "character")
   log_dt <- rbindlist(list(log_dt, data.table(
     date            = as.character(Sys.Date()),
     submission_file = basename(fname),
     method          = tag,
-    cv_auc          = cv_auc,
-    cv_sd           = NA_real_,
-    lb_public       = NA_real_,
+    cv_auc          = if (is.na(cv_auc)) "" else sprintf("%.5f", cv_auc),
+    cv_sd           = "",
+    lb_public       = "",
     notes           = ""
   )), use.names = TRUE, fill = TRUE)
   fwrite(log_dt, log_f)
