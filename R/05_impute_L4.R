@@ -72,7 +72,15 @@ PMM_K     <- 5L    # 从预测值最接近的 k 个真实观测里随机抽一�
 #' @return list
 fit_imputer_L4 <- function(dt) {
   cols <- c(NUM_COLS_L4, CAT_COLS_L4)
-  list(line = "L4", donor = dt[, ..cols])
+  # seed 必须由框架的随机流派生，不能写死。
+  # 框架在每折调用前都会 set.seed(SEED + k)，所以这里抽出来的 seed
+  # 各折不同（保证折间独立），但整体流程仍然完全可复现。
+  #
+  # 早期版本在 apply 里硬编码 seed = 1000L，导致 5 折的 missRanger
+  # 用了完全相同的随机种子 —— 折与折之间的插补结果存在非预期的相关性。
+  list(line  = "L4",
+       donor = dt[, ..cols],
+       seed  = sample.int(.Machine$integer.max, 1L))
 }
 
 #' 应用插补器：单次随机插补
@@ -95,7 +103,7 @@ apply_imputer_L4 <- function(imp, dt) {
                            # PMM_K 个真实观测样本里随机抽一个的实际取值。
                            # 插补结果因此落在真实数据见过的取值上，
                            # 分布形状得以保留，不会向均值收缩。
-    seed      = 1000L,
+    seed      = imp$seed,   # 由 fit_imputer_L4 从框架随机流派生，各折不同
     verbose   = 0
   )
 

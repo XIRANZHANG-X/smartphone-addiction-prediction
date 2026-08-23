@@ -1,9 +1,9 @@
 # =============================================================================
-# 06_model_L1_xgboost.R —— L1 × xgboost
+# 06_model_L4_lightgbm.R —— L4 × lightgbm
 #
-# 插补线：不插补，保留 NA 交给模型原生处理
+# 插补线：PMM 随机插补
 # 模型　：梯度提升树，支持原生 NaN，内部验证集早停
-# 负责人：A
+# 负责人：D
 #
 # -----------------------------------------------------------------------------
 # 本文件只做三件事：设配置、定义 fit_predict、交给框架。
@@ -18,10 +18,10 @@
 
 source("R/lib_models.R")
 
-MODEL_NAME  <- "L1_xgboost"
+MODEL_NAME  <- "L4_lightgbm"
 TIER        <- "A"          # "A" = 20 万对比实验；"B" = 全量集成候选
-IMPUTE_LINE <- "L1"
+IMPUTE_LINE <- "L4"
 
-fit_predict <- make_xgb()
+fit_predict <- make_lgb()
 
 source("R/06_framework.R")

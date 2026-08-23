@@ -1,5 +1,5 @@
 # =============================================================================
-# 06_model_L1_xgboost.R —— L1 × xgboost
+# 06_model_L1_lightgbm.R —— L1 × lightgbm
 #
 # 插补线：不插补，保留 NA 交给模型原生处理
 # 模型　：梯度提升树，支持原生 NaN，内部验证集早停
@@ -18,10 +18,10 @@
 
 source("R/lib_models.R")
 
-MODEL_NAME  <- "L1_xgboost"
+MODEL_NAME  <- "L1_lightgbm"
 TIER        <- "A"          # "A" = 20 万对比实验；"B" = 全量集成候选
 IMPUTE_LINE <- "L1"
 
-fit_predict <- make_xgb()
+fit_predict <- make_lgb()
 
 source("R/06_framework.R")

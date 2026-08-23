@@ -46,7 +46,20 @@ NUM_COLS_L3 <- c(
 
 CAT_COLS_L3 <- c("gender", "stress_level", "academic_work_impact")
 
-N_ITER_L3 <- 2L   # 迭代轮数。实测 2 轮已经收敛，再多只是浪费时间。
+# 迭代轮数。
+#
+# 早期版本写 2 并注释「实测 2 轮已经收敛，再多只是浪费时间」——
+# 那句话是**编的**，从来没有人量过。加上收敛诊断之后第一次运行就报警了。
+#
+# 实测的相对变化轨迹（按各列标准差归一化）：
+#   第 1 轮 0.3800
+#   第 2 轮 0.0433   <- 仍有 4.3% 个标准差在动，远未收敛
+#   第 3 轮 0.0137
+#   第 4 轮 0.0063   <- 才低于 1% 的收敛阈值
+#   第 8 轮 0.0010
+#
+# 取 4 轮。再往上收益进入千分之一量级，不值得多花时间。
+N_ITER_L3 <- 4L
 
 # -----------------------------------------------------------------------------
 # 约束投影
@@ -208,7 +221,13 @@ apply_imputer_L3 <- function(imp, dt) {
   }
 
   # --- 迭代：回归预测 + 约束投影 --------------------------------------------
+  # 收敛诊断：记录每轮插补值相对上一轮的平均绝对变化量。
+  # 注释里写「2 轮已收敛」不能靠拍脑袋，要能量出来（审查意见 3.4）。
+  delta_trace <- numeric(N_ITER_L3)
+
   for (iter in seq_len(N_ITER_L3)) {
+    prev <- as.matrix(dt[, ..NUM_COLS_L3])
+
     for (target in NUM_COLS_L3) {
       idx <- which(na_mask[[target]])
       if (!length(idx)) next
@@ -216,12 +235,56 @@ apply_imputer_L3 <- function(imp, dt) {
       preds <- setdiff(NUM_COLS_L3, target)
       newdata <- as.data.frame(dt[idx, ..preds])
       pred <- stats::predict(imp$models[[target]], newdata = newdata)
-
-      # 线性外推偶尔会给出极端值，用训练集见过的范围兜底
       set(dt, i = idx, j = target, value = as.numeric(pred))
     }
     .project_constraints_L3(dt, na_mask)
+
+    now <- as.matrix(dt[, ..NUM_COLS_L3])
+    # 只统计被插补的格子，观测值本来就不变
+    changed <- do.call(cbind, na_mask)
+    sc <- apply(prev, 2, function(z) stats::sd(z, na.rm = TRUE))
+    sc[!is.finite(sc) | sc == 0] <- 1
+    rel <- abs(now - prev) / rep(sc, each = nrow(now))
+    delta_trace[iter] <- if (any(changed)) mean(rel[changed]) else 0
+  }
+
+  # 收敛判据：最后一轮的相对变化 < 1% 个标准差
+  attr(dt, "l3_delta_trace") <- delta_trace
+  if (delta_trace[N_ITER_L3] > 0.01) {
+    warning(sprintf(
+      "L3 插补可能未收敛：第 %d 轮相对变化仍有 %.4f（阈值 0.01）。考虑调大 N_ITER_L3。",
+      N_ITER_L3, delta_trace[N_ITER_L3]))
   }
 
   dt
+}
+
+# -----------------------------------------------------------------------------
+# 诊断工具：约束到底触发了多少次
+# -----------------------------------------------------------------------------
+#' 统计约束投影在多少比例的行上真正改变了取值
+#'
+#' 实测结论是 0.06% —— 也就是说线性回归预测出来的值本来就几乎总是满足约束，
+#' 「约束投影」这一层基本是装饰品。这个函数让这个结论可以随时复现，
+#' 而不是靠一句注释。见项目说明第六节。
+#'
+#' @param imp fit_imputer_L3 的返回值
+#' @param dt 待插补数据
+#' @return list(n_rows, n_clamped, pct)
+diagnose_constraints_L3 <- function(imp, dt) {
+  d1 <- apply_imputer_L3(imp, copy(dt))
+
+  # 关掉约束再跑一遍，比较差异
+  proj_backup <- .project_constraints_L3
+  assign(".project_constraints_L3", function(dt, na_mask) dt, envir = globalenv())
+  d2 <- apply_imputer_L3(imp, copy(dt))
+  assign(".project_constraints_L3", proj_backup, envir = globalenv())
+
+  m1 <- as.matrix(d1[, ..NUM_COLS_L3])
+  m2 <- as.matrix(d2[, ..NUM_COLS_L3])
+  diff_cell <- abs(m1 - m2) > 1e-8
+  n_clamped <- sum(rowSums(diff_cell, na.rm = TRUE) > 0)
+
+  list(n_rows = nrow(dt), n_clamped = n_clamped,
+       pct = 100 * n_clamped / nrow(dt))
 }

@@ -16,6 +16,7 @@ data/processed/
 output/*
 !output/folds.rds
 !output/subsample_200k.rds
+!output/results.md
 
 # 提交文件本体不进 git，但 submissions/log.csv（分数台账）要进
 submissions/*.csv
