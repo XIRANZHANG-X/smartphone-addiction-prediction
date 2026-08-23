@@ -34,15 +34,39 @@ N_REPEAT <- 3L
 
 # 默认只对「有结论要下」的格子做重复 —— 重复 CV 成本是单次的 3 倍，
 # 没必要对全部 14 格都做。
+# 不含 L4：它每格 38 分钟（missRanger），三次重复要 114 分钟，
+# 而 L3 vs L4 的差异已经很大（Cohen's d = 8.49，5/5 折同号），
+# 不需要 n=15 来加固。真正需要更大样本量的是 L1 vs L2 这种边缘对比
+# （原 n=5 时 p=0.023，4/5 同号）。
 DEFAULT_CELLS <- c(
-  "L1_xgboost", "L2_xgboost", "L3_xgboost", "L4_xgboost",  # 核心阶梯
-  "L2_glmnet",  "L3_glmnet"                                 # 反向预测那一对
+  "L1_xgboost", "L2_xgboost", "L3_xgboost",   # 核心阶梯（去掉最贵的 L4）
+  "L2_glmnet",  "L3_glmnet"                    # 反向预测那一对
 )
 
 args  <- commandArgs(trailingOnly = TRUE)
 cells <- if (length(args)) args else DEFAULT_CELLS
 
 rscript <- file.path(R.home("bin"), "Rscript")
+
+# -----------------------------------------------------------------------------
+# 带环境变量地跑一个子进程
+# -----------------------------------------------------------------------------
+# 不能用 system2(env = ...) —— 它在 Windows 上是坏的：
+# R 的实现是给命令加 Unix 的 `env` 前缀，而 Windows 没有这个命令，
+# 结果整条命令秒退（退出码非 0，耗时 0.0 分钟），而且错得很安静。
+#
+# 正确做法是在父进程里 Sys.setenv()，子进程自然继承。
+run_with_env <- function(rscript, args, vars = character(0)) {
+  old <- vapply(names(vars), function(k) Sys.getenv(k, unset = NA_character_),
+                character(1))
+  do.call(Sys.setenv, as.list(vars))
+  on.exit({
+    for (k in names(vars)) {
+      if (is.na(old[[k]])) Sys.unsetenv(k) else do.call(Sys.setenv, setNames(list(old[[k]]), k))
+    }
+  }, add = TRUE)
+  system2(rscript, args, stdout = "", stderr = "")
+}
 
 cat("======================================================\n")
 cat(sprintf("  重复交叉验证：%d 个格子 × %d 次重复 = %d 次运行\n",
@@ -66,8 +90,7 @@ for (cell in cells) {
     cat(sprintf("  %-14s 重复 %d ... ", cell, r)); flush.console()
     t0 <- Sys.time()
     # 每次跑独立子进程，REPEAT_ID 通过环境变量传给框架
-    status <- system2(rscript, f, stdout = NULL, stderr = NULL,
-                      env = sprintf("REPEAT_ID=%d", r))
+    status <- run_with_env(rscript, f, c(REPEAT_ID = as.character(r)))
     mins <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
 
     if (status == 0 && file.exists(out)) {

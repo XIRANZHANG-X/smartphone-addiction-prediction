@@ -51,6 +51,26 @@ cat(sprintf("\n将在全量 691,369 行上重训 %d 个候选\n", length(cand)))
 cat("======================================================\n\n")
 
 rscript <- file.path(R.home("bin"), "Rscript")
+
+# -----------------------------------------------------------------------------
+# 带环境变量地跑一个子进程
+# -----------------------------------------------------------------------------
+# 不能用 system2(env = ...) —— 它在 Windows 上是坏的：
+# R 的实现是给命令加 Unix 的 `env` 前缀，而 Windows 没有这个命令，
+# 结果整条命令秒退（退出码非 0，耗时 0.0 分钟），而且错得很安静。
+#
+# 正确做法是在父进程里 Sys.setenv()，子进程自然继承。
+run_with_env <- function(rscript, args, vars = character(0)) {
+  old <- vapply(names(vars), function(k) Sys.getenv(k, unset = NA_character_),
+                character(1))
+  do.call(Sys.setenv, as.list(vars))
+  on.exit({
+    for (k in names(vars)) {
+      if (is.na(old[[k]])) Sys.unsetenv(k) else do.call(Sys.setenv, setNames(list(old[[k]]), k))
+    }
+  }, add = TRUE)
+  system2(rscript, args, stdout = "", stderr = "")
+}
 t_all <- Sys.time()
 ok <- character(0); failed <- character(0)
 
@@ -66,7 +86,7 @@ for (i in seq_along(cand)) {
 
   cat(sprintf("---- [%d/%d] %s（全量）----\n", i, length(cand), cell))
   t0 <- Sys.time()
-  status <- system2(rscript, f, stdout = "", stderr = "", env = "TIER=B")
+  status <- run_with_env(rscript, f, c(TIER = "B"))
   mins <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
 
   if (status == 0 && file.exists(sprintf("output/test/test_%s.rds", cell))) {
