@@ -68,9 +68,19 @@ derive_features <- function(dt) {
   dt[, free_frac := safe_div(daily_screen_time_hours,
                              24 - sleep_hours - work_study_hours)]
 
-  # --- 发现 5：近似充分统计量 -----------------------------------------------
-  # 在完整数据上，这一个数就能把成瘾率从 0.14 单调推到 1.00。
-  # 树模型理论上能自己学出这个和，但显式给出来能省掉很多层分裂。
+  # --- 屏幕时间 + 社交时间 ---------------------------------------------------
+  # ⚠ 命名与定位都要小心：由发现 1 可知 social 本身就是 screen 的一个分量，
+  #   所以这个和等价于 2*social + gaming + other —— 社交被算了两遍。
+  #
+  #   早期注释称它为「近似充分统计量」，那是不成立的说法。实测：
+  #     单变量 AUC   screen+social 0.912 vs screen 单独 0.889
+  #     但扫描 screen + w*social，最优 w = 1.75（0.915），不是 1
+  #     => 权重 1 只是「两个量相加」的副产物，不是推导结果
+  #     置换重要性仅 0.00096，与自身分量回归 R^2 = 1.000000
+  #     => 精确线性组合，零新信息；树模型只是冗余，线性模型秩亏
+  #
+  #   保留它是为了让「派生特征无效」这条阴性结论有证据，
+  #   不是因为它有用。详见 R/16_screensocial_audit.R。
   dt[, screen_social := daily_screen_time_hours + social_media_hours]
 
   dt[]
