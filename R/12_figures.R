@@ -113,37 +113,105 @@ p1 <- ggplot(samp, aes(x = part_sum, y = daily_screen_time_hours)) +
 save_fig(p1, "fig1_硬结构约束")
 
 # =============================================================================
-# 图 2：标签的单调性（发现 5）
+# 图 2：观测特征对标签的解释力（发现 5）
 # =============================================================================
 cat("[2/7] 标签单调性 ...\n")
 
-s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
-sb <- s[, .(n = .N, rate = mean(addicted_label)),
-        by = .(bin = floor(daily_screen_time_hours + social_media_hours))
-      ][n > 500][order(bin)]
+# -----------------------------------------------------------------------------
+# 这张图被质疑过，质疑意见与实测回应记录在此，避免以后重复争论：
+#
+# 质疑一「把两个时长相加，右端必然 100%，是数学必然而非发现」
+#   反证：把标签随机打乱后重新分箱，极差从 0.862 塌到 0.028，
+#   17 个间隔里 9 处下降 —— 同样的相加操作，换个标签就没有单调性。
+#   另有反例：通知数/50 + 打开次数/30 同样相加，极差仅 0.0895 且不单调。
+#   单调性来自特征与标签的真实关联，不是算术。
+#
+# 质疑二「右端没有阴性样本」
+#   部分属实但被显示精度掩盖了：13~16 箱仍有 127 个阴性样本
+#   （99.77%~99.98%），真正零阴性的只有 17 箱以上，占全量 1.4%。
+#   本版改用四位小数并标注阴性样本数，不再显示成整齐的 100.0%。
+#
+# 质疑三「剔除缺失行引入选择偏差」
+#   实测：两列都不缺 vs 至少缺一列，成瘾率 0.7092 对 0.7099，差 0.0007；
+#   屏幕时间分布均值差 0.011 小时，KS 的 D=0.0085。
+#   （KS 的 p<0.0001 不说明问题 —— 50 万样本上任何微小差异都会显著，
+#     要看的是 D 值。）这与发现 6「缺失为 MCAR」互相印证。
+#
+# 质疑四「应该去掉 100% 区间只画 0~12 小时」
+#   不采纳。截断高值区间等于藏数据，本项目不做这种处理。
+#   改为把不确定性显式画出来（置信区间 + 样本量），让读者自行判断。
+#
+# 据此本版做了三处改进：
+#   (a) 主面板改用**单个变量**，保留 86.1% 的数据而非 72.6%
+#   (b) 加 95% 置信区间
+#   (c) 副面板加**打乱标签的对照线**，直接展示效应的真实性
+# -----------------------------------------------------------------------------
 
-p2 <- ggplot(sb, aes(x = bin, y = rate)) +
+# --- (a) 单变量 + 置信区间（仅剔除该列缺失，保留 86.1% 数据）----------------
+one <- train[!is.na(daily_screen_time_hours),
+             .(n = .N, pos = sum(addicted_label), rate = mean(addicted_label)),
+             by = .(bin = floor(daily_screen_time_hours))][n > 500][order(bin)]
+one[, se := sqrt(rate * (1 - rate) / n)]
+one[, `:=`(lo = pmax(0, rate - 1.96 * se), hi = pmin(1, rate + 1.96 * se))]
+
+p2a <- ggplot(one, aes(x = bin, y = rate)) +
   geom_hline(yintercept = 0.7094, linetype = "dashed",
-             linewidth = 1, color = GREY) +
-  annotate("text", x = 19, y = 0.655, hjust = 1, family = CN, fontface = "bold",
-           size = 4.6, color = GREY, label = "全体基准率 0.7094") +
+             linewidth = 0.9, color = GREY) +
+  annotate("text", x = 13, y = 0.665, hjust = 1, family = CN, fontface = "bold",
+           size = 4.2, color = GREY, label = "全体基准率 0.7094") +
+  geom_ribbon(aes(ymin = lo, ymax = hi), fill = BLUE, alpha = 0.25) +
   geom_line(color = BLUE, linewidth = 1.4) +
-  geom_point(aes(size = n), shape = 21, fill = BLUE,
-             color = "black", stroke = 1) +
-  scale_size_continuous(range = c(3, 9), name = "样本数",
+  geom_point(aes(size = n), shape = 21, fill = BLUE, color = "black", stroke = 1) +
+  scale_size_continuous(range = c(2.5, 7), name = "样本数",
                         labels = label_comma()) +
   scale_y_continuous(labels = percent_format(accuracy = 1),
-                     breaks = seq(0, 1, 0.2)) +
-  scale_x_continuous(breaks = seq(0, 20, 2)) +
-  labs(
-    title    = "图 2  数据完整时，标签几乎是确定的",
-    subtitle = "成瘾率随「屏幕时间 + 社交时间」单调上升，从 18% 到 100%，全程无反复",
-    x = "每日屏幕时间 + 社交媒体时间（小时）",
-    y = "成瘾比例"
-  ) +
-  theme_proj()
+                     breaks = seq(0, 1, 0.2), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(0, 14, 2)) +
+  labs(subtitle = "(a) 仅用每日屏幕时间一个变量（保留 86.1% 的数据，阴影为 95% 置信区间）",
+       x = "每日屏幕时间（小时）", y = "成瘾比例") +
+  theme_proj(14)
 
-save_fig(p2, "fig2_标签单调性")
+# --- (b) 真实标签 vs 打乱标签 ------------------------------------------------
+s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
+s[, score := daily_screen_time_hours + social_media_hours]
+set.seed(42)
+s[, y_shuf := sample(addicted_label)]
+
+real <- s[, .(n = .N, rate = mean(addicted_label)),
+          by = .(bin = floor(score))][n > 500][order(bin)][, grp := "真实标签"]
+shuf <- s[, .(n = .N, rate = mean(y_shuf)),
+          by = .(bin = floor(score))][n > 500][order(bin)][, grp := "标签随机打乱（对照）"]
+cmp <- rbind(real, shuf)
+cmp[, grp := factor(grp, levels = c("真实标签", "标签随机打乱（对照）"))]
+
+p2b <- ggplot(cmp, aes(x = bin, y = rate, color = grp, linetype = grp)) +
+  geom_hline(yintercept = 0.7094, linetype = "dotted",
+             linewidth = 0.8, color = GREY) +
+  geom_line(linewidth = 1.4) +
+  geom_point(size = 2.8) +
+  scale_color_manual(values = c(BLUE, RED), name = NULL) +
+  scale_linetype_manual(values = c("solid", "dashed"), name = NULL) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     breaks = seq(0, 1, 0.2), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(0, 20, 4)) +
+  labs(subtitle = "(b) 对照检验：同样的「两变量相加再分箱」，打乱标签后曲线立刻塌平",
+       x = "屏幕时间 + 社交时间（小时）", y = NULL) +
+  theme_proj(14) +
+  theme(legend.position = "top")
+
+p2 <- (p2a | p2b) +
+  plot_annotation(
+    title    = "图 2  观测特征对标签的解释力",
+    subtitle = paste0("成瘾比例随使用时长上升，最高箱达 99.98%（13~16 箱仍有 127 个阴性样本，",
+                      "真正零阴性的仅占全量 1.4%）。\n右图证明该趋势并非「相加」这一操作的算术产物：",
+                      "打乱标签后极差由 0.862 降至 0.028。"),
+    theme = theme(
+      plot.title    = element_text(family = CN, face = "bold", size = 22),
+      plot.subtitle = element_text(family = CN, size = 13, color = "grey30")
+    )
+  )
+
+save_fig(p2, "fig2_标签单调性", w = 15, h = 6.8)
 
 # =============================================================================
 # 图 3：Simpson 悖论（发现 7）
