@@ -79,7 +79,7 @@ suppressMessages(library(data.table))
 #' @param params 覆盖默认参数的 list
 #' @param max_rounds 早停的上限。给足够大，让早停来决定实际轮数。
 #' @param es_rounds 连续多少轮没提升就停
-make_xgb <- function(params = list(), max_rounds = 3000L, es_rounds = 50L,
+make_xgb <- function(params = list(), max_rounds = 10000L, es_rounds = 50L,
                      drop_extra = character(0), onehot = FALSE) {
   defaults <- list(
     objective        = "binary:logistic",
@@ -127,6 +127,20 @@ make_xgb <- function(params = list(), max_rounds = 3000L, es_rounds = 50L,
     }
     best <- best + 1L
 
+    # ⚠ max_rounds 本身是一个会**静默生效**的超参数。
+    # 如果早停选出的轮数贴着上限，说明模型还在变好就被截断了 ——
+    # 分数看起来正常，实际是欠拟合。这和「静默兜底」是同一类陷阱。
+    #
+    # 实测踩过：depth=4 在 20 万行上要 2748 轮（上限 3000 之内，没事），
+    # 换到全量 69 万行就需要 3000+ 轮，于是 5 折全部卡在 3000，
+    # 跨折标准差从 0.00126 掉到 0.00045，而 AUC 反而比 depth=6 低 —— 
+    # 差点得出「调参没用」的错误结论。
+    if (best >= max_rounds * 0.98) {
+      warning(sprintf(
+        "早停轮数 %d 已贴近上限 %d —— 模型可能未训完，请调大 max_rounds。",
+        best, max_rounds), call. = FALSE)
+    }
+
     # --- 第二步：用定下的轮数，在训练折全量上重训 ---
     # 内部验证集只用来定轮数，不参与最终模型的评估，
     # 外层验证折全程没被碰过。
@@ -142,7 +156,7 @@ make_xgb <- function(params = list(), max_rounds = 3000L, es_rounds = 50L,
 # -----------------------------------------------------------------------------
 # lightgbm
 # -----------------------------------------------------------------------------
-make_lgb <- function(params = list(), max_rounds = 3000L, es_rounds = 50L,
+make_lgb <- function(params = list(), max_rounds = 10000L, es_rounds = 50L,
                      drop_extra = character(0), onehot = FALSE) {
   defaults <- list(
     objective       = "binary",
@@ -182,6 +196,11 @@ make_lgb <- function(params = list(), max_rounds = 3000L, es_rounds = 50L,
            as.character(utils::packageVersion("lightgbm")))
     }
     best <- as.integer(best)
+    if (best >= max_rounds * 0.98) {
+      warning(sprintf(
+        "早停轮数 %d 已贴近上限 %d —— 模型可能未训完，请调大 max_rounds。",
+        best, max_rounds), call. = FALSE)
+    }
 
     d_full <- lightgbm::lgb.Dataset(M_tr, label = y_tr)
     model  <- lightgbm::lgb.train(params = p, data = d_full,

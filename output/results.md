@@ -1,6 +1,6 @@
 # 实验结果汇总
 
-> 本文件由 `R/11_report.R` 自动生成于 2026-08-24 00:22。
+> 本文件由 `R/11_report.R` 自动生成于 2026-08-24 09:16。
 > 不要手工编辑 —— 重跑脚本即可刷新。
 
 ## 一、实验网格（Tier A，20 万行，5 折 CV）
@@ -154,8 +154,10 @@
 |---|---|---|---|
 | `L1_lightgbm` | 0.95983 | 0.96368 | +0.00385 |
 | `L1_xgboost` | 0.96088 | 0.96454 | +0.00366 |
+| `L1_xgboost_tuned` | — | 0.96414 | — |
 | `L2_lightgbm` | 0.95975 | 0.96363 | +0.00388 |
 | `L2_xgboost` | 0.96047 | 0.96402 | +0.00354 |
+| `L2_xgboost_tuned` | — | 0.96353 | — |
 | `L3_glmnet` | 0.92825 | 0.92778 | -0.00047 |
 | `L3_lightgbm` | 0.95957 | 0.96330 | +0.00373 |
 | `L3_ranger` | 0.93980 | 0.94126 | +0.00146 |
@@ -165,10 +167,10 @@
 | 方式 | CV AUC |
 |---|---|
 | logistic | 0.96450 |
-| rank_avg | 0.96140 |
+| rank_avg | 0.96242 |
 | hillclimb | 0.96477 ← 最优 |
 
 最好的单模型 0.96453，集成提升 **+0.00024**。
 
-参与集成的模型：`L1_lightgbm`、`L1_xgboost`、`L2_lightgbm`、`L2_xgboost`、`L3_glmnet`、`L3_lightgbm`、`L3_ranger`
+参与集成的模型：`L1_lightgbm`、`L1_xgboost`、`L1_xgboost_tuned`、`L2_lightgbm`、`L2_xgboost`、`L2_xgboost_tuned`、`L3_glmnet`、`L3_lightgbm`、`L3_ranger`
 
