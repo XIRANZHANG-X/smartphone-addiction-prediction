@@ -8,3 +8,6 @@
 *.png    binary
 *.pptx   binary
 *.xlsx   binary
+
+# 分数台账要在 Excel 里编辑：保持 CRLF + BOM，不做行尾/编码转换
+submissions/log.csv -text

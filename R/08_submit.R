@@ -90,6 +90,10 @@ if (file.exists(log_f)) {
     lb_public       = "",
     notes           = ""
   )), use.names = TRUE, fill = TRUE)
-  fwrite(log_dt, log_f)
+  # bom = TRUE：中文 Windows 的 Excel 打开无 BOM 的 UTF-8 CSV 会乱码，
+  # 组员在 Excel 里填完 LB 分数一保存就变成 GBK，下次脚本读就报
+  # UnicodeDecodeError。加 BOM 之后 Excel 和 git 两边都认。
+  # （这个坑我们真踩过一次，见 submissions/log.csv 的提交历史）
+  fwrite(log_dt, log_f, bom = TRUE)
   cat(sprintf("已在 %s 追加一行。\n", log_f))
 }
