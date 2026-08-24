@@ -28,7 +28,7 @@
 2026/8/24,,L3_ranger_tierB,0.94126,,,全量69万重训，多样性成员
 2026/8/24,,L3_glmnet_tierB,0.92778,,,全量69万重训，唯一没从更多数据获益的模型(-0.00047)
 2026/8/24,submission_20260824_0017_hillclimb.csv,ensemble_hillclimb,0.96477,,0.96613,7成员爬山法集成；最好单模型L1_xgboost 0.96453，集成仅提升+0.00024
-2026-08-24,submission_20260824_0916_hillclimb.csv,hillclimb,0.96477,,,作废：调参版撞 max_rounds=3000 上限被截断，未提交
-2026-08-24,,L1_xgboost_tuned_tierB,0.96465,0.00043,,depth=4 全量；需4405轮（默认depth=6只要2000轮）；比默认版 +0.00012
-2026-08-24,,L2_xgboost_tuned_tierB,0.96403,0.00036,,depth=4 全量；需4282轮
-2026-08-24,submission_20260824_0947_hillclimb.csv,hillclimb,0.96487,,,上限提到10000后重跑；9成员爬山法；最好单模型 L1_xgboost_tuned 0.96465
+2026/8/24,submission_20260824_0916_hillclimb.csv,hillclimb,0.96477,,,作废：调参版撞 max_rounds=3000 上限被截断，未提交
+2026/8/24,,L1_xgboost_tuned_tierB,0.96465,0.00043,,depth=4 全量；需4405轮（默认depth=6只要2000轮）；比默认版 +0.00012
+2026/8/24,,L2_xgboost_tuned_tierB,0.96403,0.00036,,depth=4 全量；需4282轮
+2026/8/24,submission_20260824_0947_hillclimb.csv,hillclimb,0.96487,,0.96627,预测 0.96623（CV+0.00136），实际 0.96627，误差 4e-5 —— 校准关系二次验证成立
