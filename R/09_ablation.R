@@ -46,8 +46,16 @@ y_pool <- train_all$addicted_label[sub]
 f_pool <- folds[sub]
 
 DERIVED <- c("other_screen", "weekend_ratio", "social_share",
-             "gaming_share", "free_frac", "screen_social")
-NA_IND  <- grep("^is_na_", names(feat), value = TRUE)
+             "gaming_share", "free_frac")
+
+# 缺失指示列已从默认特征集移除（见 R/03_features.R 的说明），因此在新的
+# features_raw.rds 上 NA_IND 为空，相关变体会自动跳过。
+# 要复现「缺失指示无效」那一组消融，先重建带指示列的特征矩阵：
+#   WITH_NA_INDICATORS <- TRUE; FORCE_REBUILD <- TRUE; source("R/03_features.R")
+NA_IND     <- grep("^is_na_", names(feat), value = TRUE)
+HAS_NA_IND <- length(NA_IND) > 0L
+NA_BLOCK   <- if (HAS_NA_IND) c(NA_IND, "n_missing") else character(0)
+if (!HAS_NA_IND) cat("提示：features_raw.rds 不含缺失指示列，相关变体跳过。\n")
 CAT3    <- c("stress_level", "academic_work_impact", "gender")
 
 #' 跑一个消融变体
@@ -83,8 +91,8 @@ run_variant <- function(line, drop = character(0)) {
 sets1 <- list(
   full    = character(0),
   noderiv = DERIVED,
-  nonoise = c(CAT3, "notifications_per_day", NA_IND, "n_missing"),
-  lean    = c(CAT3, "notifications_per_day", NA_IND, "n_missing", "free_frac")
+  nonoise = c(CAT3, "notifications_per_day", NA_BLOCK),
+  lean    = c(CAT3, "notifications_per_day", NA_BLOCK, "free_frac")
 )
 
 res <- list()
@@ -105,12 +113,12 @@ for (line in c("L1", "L3")) {
 # 阶段二：拆开噪声组，定位具体是哪个特征（只用 L1）
 # -----------------------------------------------------------------------------
 sets2 <- list(
-  no_naind = c(NA_IND, "n_missing"),
   no_cat3  = CAT3,
   no_notif = "notifications_per_day",
   no_opens = "app_opens_per_day",
   no_age   = "age"
 )
+if (HAS_NA_IND) sets2 <- c(list(no_naind = NA_BLOCK), sets2)
 
 cat("\n======================================================\n")
 cat("  阶段二：逐个拆解（L1）\n")

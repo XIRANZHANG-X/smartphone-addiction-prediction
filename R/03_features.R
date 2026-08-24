@@ -9,8 +9,7 @@
 # 为什么特征要分两批
 # -----------------------------------------------------------------------------
 # 批一（本脚本直接产出，全组共享）：
-#   原始 12 列 + 缺失指示 + n_missing
-#   这些不依赖插补，可以安全地在折外一次性算好。
+#   原始 12 列。这些不依赖插补，可以安全地在折外一次性算好。
 #
 # 批二（derive_features()，各线在插补之后自己调）：
 #   other_screen、weekend_ratio、social_share 等比值/差值特征
@@ -68,27 +67,20 @@ derive_features <- function(dt) {
   dt[, free_frac := safe_div(daily_screen_time_hours,
                              24 - sleep_hours - work_study_hours)]
 
-  # --- 屏幕时间 + 社交时间 ---------------------------------------------------
-  # ⚠ 命名与定位都要小心：由发现 1 可知 social 本身就是 screen 的一个分量，
-  #   所以这个和等价于 2*social + gaming + other —— 社交被算了两遍。
-  #
-  #   早期注释称它为「近似充分统计量」，那是不成立的说法。实测：
-  #     单变量 AUC   screen+social 0.912 vs screen 单独 0.889
-  #     但扫描 screen + w*social，最优 w = 1.75（0.915），不是 1
-  #     => 权重 1 只是「两个量相加」的副产物，不是推导结果
-  #     置换重要性仅 0.00096，与自身分量回归 R^2 = 1.000000
-  #     => 精确线性组合，零新信息；树模型只是冗余，线性模型秩亏
-  #
-  #   保留它是为了让「派生特征无效」这条阴性结论有证据，
-  #   不是因为它有用。详见 R/16_screensocial_audit.R。
-  dt[, screen_social := daily_screen_time_hours + social_media_hours]
+  # --- 已移除：screen_social = 屏幕时间 + 社交时间 --------------------------
+  # 由发现 1 可知 social 本身就是 screen 的一个分量，二者相加等价于
+  # 2*social + gaming + other —— 社交被算了两遍，没有任何理由让权重停在 1
+  # （扫描 screen + w*social，最优 w = 1.75 而非 1）。
+  # 它与自身分量回归 R^2 = 1.000000，是精确线性组合，零新信息：
+  # 对树模型只是冗余，对 glmnet 造成设计矩阵秩亏。
+  # 剔除依据的完整检验见 R/16_screensocial_audit.R。
 
   dt[]
 }
 
 # 派生特征的列名，供下游做特征选择/消融时引用
 DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
-                  "gaming_share", "free_frac", "screen_social")
+                  "gaming_share", "free_frac")
 
 # -----------------------------------------------------------------------------
 # 构建批一：features_raw
@@ -97,7 +89,7 @@ DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
 # 这样各线 source 本文件拿 derive_features() 时不会反复重算。
 # 需要强制重建时：FORCE_REBUILD <- TRUE; source("R/03_features.R")
 
-.build_features_raw <- function() {
+.build_features_raw <- function(with_na_ind = FALSE) {
   dir_out <- "output"
   f_train <- file.path(dir_out, "raw_train.rds")
   f_test  <- file.path(dir_out, "raw_test.rds")
@@ -124,19 +116,28 @@ DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
 
   all_dt <- rbindlist(list(train, test), use.names = TRUE, fill = FALSE)
 
-  # --- 缺失指示 -------------------------------------------------------------
-  # 已经量化确认缺失是 MCAR（见 docs/项目说明.md 发现 6）：
-  # 12 列的 missing/present 成瘾率差全部 < 0.0042，纯随机。
+  # --- 缺失指示（默认不生成）------------------------------------------------
+  # 曾经默认生成 12 个 is_na_<col> 加 1 个 n_missing，共 13 列。现已移除：
   #
-  # 那为什么还要算？因为「缺失指示无效」是一个要用数据证明的阴性结论。
-  # F 负责的消融实验会去掉这组特征，展示 AUC 几乎不动。
-  # 阴性结果讲得好比正面结果更能体现理解深度。
-  for (col in feat_cols) {
-    set(all_dt, j = paste0("is_na_", col), value = as.integer(is.na(all_dt[[col]])))
+  #   缺失机制已量化确认为 MCAR（见 docs/项目说明.md 发现 6）：
+  #   12 列的 missing/present 成瘾率差全部 < 0.0042，缺失与标签无关。
+  #   消融实验证实删掉这 13 列 AUC 变化 +0.00003（p = 0.448），
+  #   置换重要性全部 <= 0.00001，其中 11 列为负。
+  #
+  #   一句话：它们是为了检验「缺失本身是否携带信息」而造的诊断变量，
+  #   检验结论是否定的，因此不进入模型特征集。
+  #
+  # 复现那次消融时才需要它们：
+  #   WITH_NA_INDICATORS <- TRUE; FORCE_REBUILD <- TRUE; source("R/03_features.R")
+  if (with_na_ind) {
+    for (col in feat_cols) {
+      set(all_dt, j = paste0("is_na_", col), value = as.integer(is.na(all_dt[[col]])))
+    }
+    na_cols <- paste0("is_na_", feat_cols)
+    all_dt[, n_missing := rowSums(.SD), .SDcols = na_cols]
+  } else {
+    na_cols <- character(0)
   }
-
-  na_cols <- paste0("is_na_", feat_cols)
-  all_dt[, n_missing := rowSums(.SD), .SDcols = na_cols]
 
   saveRDS(all_dt, file.path(dir_out, "features_raw.rds"))
 
@@ -147,11 +148,16 @@ DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
               format(sum(all_dt$is_train == 1L), big.mark = ","),
               format(sum(all_dt$is_train == 0L), big.mark = ",")))
   cat(sprintf("总列数   %d\n", ncol(all_dt)))
-  cat(sprintf("  原始特征 %d + 缺失指示 %d + n_missing 1 + id/target/is_train 3\n",
-              length(feat_cols), length(na_cols)))
+  cat(sprintf("  原始特征 %d + 缺失指示 %d + id/target/is_train 3\n",
+              length(feat_cols), length(na_cols) + as.integer(with_na_ind)))
+  cat(sprintf("  插补后再加 %d 个派生特征 -> 建模特征共 %d 个\n",
+              length(DERIVED_COLS),
+              length(feat_cols) + length(na_cols) + as.integer(with_na_ind) +
+                length(DERIVED_COLS)))
 
   cat("\n每行缺失个数的分布：\n")
-  tb <- table(all_dt$n_missing)
+  n_miss_vec <- rowSums(is.na(all_dt[, ..feat_cols]))
+  tb <- table(n_miss_vec)
   for (k in names(tb)) {
     cat(sprintf("  缺 %2s 个：%8s 行 (%5.2f%%)\n",
                 k, format(tb[[k]], big.mark = ","), 100 * tb[[k]] / nrow(all_dt)))
@@ -161,9 +167,10 @@ DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
 }
 
 # 执行
-if (!exists("FORCE_REBUILD")) FORCE_REBUILD <- FALSE
+if (!exists("FORCE_REBUILD"))     FORCE_REBUILD     <- FALSE
+if (!exists("WITH_NA_INDICATORS")) WITH_NA_INDICATORS <- FALSE
 if (FORCE_REBUILD || !file.exists(file.path("output", "features_raw.rds"))) {
-  .build_features_raw()
+  .build_features_raw(with_na_ind = WITH_NA_INDICATORS)
   cat('\n下一步：source("R/04_folds.R")\n')
 } else {
   cat("features_raw.rds 已存在，跳过构建。\n")

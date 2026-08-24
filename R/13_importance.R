@@ -65,9 +65,7 @@ CN_NAME <- c(
   weekend_ratio           = "周末/日常比值（派生）",
   social_share            = "社交占比（派生）",
   gaming_share            = "游戏占比（派生）",
-  free_frac               = "空闲时间占比（派生）",
-  screen_social           = "屏幕+社交（派生）",
-  n_missing               = "缺失个数"
+  free_frac               = "空闲时间占比（派生）"
 )
 pretty_name <- function(x) {
   out <- CN_NAME[x]

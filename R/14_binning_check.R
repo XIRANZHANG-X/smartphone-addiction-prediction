@@ -1,3 +1,13 @@
+# =============================================================================
+# 14_binning_check.R —— 分箱口径核查（存档脚本）
+#
+# ⚠ 本脚本核查的是**已被移除的**构造 `屏幕时间 + 社交时间`。
+#   该变量已于 2026-08-24 从特征集与全部 EDA 分层中删除
+#   （理由见 docs/项目说明.md 6.5 与 R/16_screensocial_audit.R）。
+#   脚本保留于此，是因为当时的分箱口径争论需要一份可复现的记录。
+#   现行的单变量分箱口径见 R/12_figures.R 图 2。
+# =============================================================================
+
 suppressMessages(library(data.table))
 train <- readRDS("output/raw_train.rds")
 s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]

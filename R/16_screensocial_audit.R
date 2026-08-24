@@ -1,3 +1,30 @@
+# =============================================================================
+# 16_screensocial_audit.R —— screen_social 的剔除依据（存档脚本）
+#
+# 用法：Rscript R/16_screensocial_audit.R
+#
+# 背景：项目早期把 screen_social = 屏幕时间 + 社交时间 当作派生特征之一，
+#       并在文档里称其为「近似充分统计量」。这个说法不成立：由发现 1 可知
+#       social 本身就是 screen 的一个分量，二者相加等价于
+#       2*social + gaming + other —— 社交被算了两遍。
+#
+# 本脚本的四项检验就是剔除它的依据：
+#   1. 作为单变量打分器它确实有效（AUC 0.912 > screen 单独的 0.889），
+#      但这只说明社交是屏幕时间里最有预测力的成分；
+#   2. 扫描 screen + w*social，最优 w = 1.75 而非 1 —— 权重 1 只是
+#      「两个量相加」这个动作的副产物，不是任何推导的结果；
+#   3. 在模型里置换重要性仅 0.00096，可有可无；
+#   4. 与自身两个分量回归 R^2 = 1.000000 —— 精确线性组合，零新信息，
+#      对树模型是冗余，对 glmnet 造成设计矩阵秩亏。
+#
+# 结论：该变量已从 R/03_features.R 移除，派生特征由 6 个减为 5 个。
+#       脚本保留于此，供报告引用与复现。
+#
+# 注：检验 3 读取 output/importance.rds。该文件若是在移除之后重新生成的，
+#     里面不再有 screen_social 这一行，该检验会自动跳过 —— 属正常现象，
+#     历史数值见上方与 docs/项目说明.md。
+# =============================================================================
+
 suppressMessages(library(data.table))
 train <- readRDS("output/raw_train.rds")
 
@@ -24,7 +51,7 @@ cand <- list(
   "social 单独"                       = d$social_media_hours,
   "gaming 单独"                       = d$gaming_hours,
   "other 单独（残差分量）"            = d$other,
-  "screen + social（现用，社交算2遍）" = d$daily_screen_time_hours + d$social_media_hours,
+  "screen + social（已剔除，社交算2遍）" = d$daily_screen_time_hours + d$social_media_hours,
   "screen + gaming"                   = d$daily_screen_time_hours + d$gaming_hours,
   "screen + social + gaming"          = d$daily_screen_time_hours + d$social_media_hours + d$gaming_hours,
   "2*social + gaming + other（等价展开）" = 2 * d$social_media_hours + d$gaming_hours + d$other
@@ -36,7 +63,7 @@ for (i in seq_len(nrow(res)))
   cat(sprintf("  %-38s %.5f\n", res$方案[i], res$AUC[i]))
 
 cat(sprintf("\nscreen+social 相对 screen 单独：%+.5f\n",
-            res[方案 == "screen + social（现用，社交算2遍）", AUC] -
+            res[方案 == "screen + social（已剔除，社交算2遍）", AUC] -
             res[方案 == "screen 单独", AUC]))
 
 hr("检验 2：换个权重会更好吗？—— 扫描 screen + w*social")
@@ -45,7 +72,7 @@ ws <- seq(0, 3, by = 0.25)
 aw <- vapply(ws, function(w) fast_auc(y, d$daily_screen_time_hours + w * d$social_media_hours), 0)
 for (i in seq_along(ws))
   cat(sprintf("  w = %.2f   AUC %.5f%s\n", ws[i], aw[i],
-              if (ws[i] == 1) "   <- 现用的权重" else
+              if (ws[i] == 1) "   <- 曾用的权重" else
               if (aw[i] == max(aw)) "   <- 最优" else ""))
 cat(sprintf("\n最优权重 w=%.2f，比 w=1 高 %+.5f\n", ws[which.max(aw)], max(aw) - aw[ws == 1]))
 cat("=> w=1 并非最优，它只是「两个量相加」这个动作的副产物。\n")

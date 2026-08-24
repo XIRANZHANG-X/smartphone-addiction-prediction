@@ -78,8 +78,8 @@ hr("发现 4：三个特征是纯噪声")
 # 任何与屏幕时间有一点相关的东西都会显得有信息量。
 d <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours) &
            !is.na(stress_level) & !is.na(academic_work_impact)]
-d[, band := fifelse(daily_screen_time_hours + social_media_hours < 6, "低分段",
-             fifelse(daily_screen_time_hours + social_media_hours < 10, "中分段", "高分段"))]
+d[, band := fifelse(daily_screen_time_hours < 4.5, "低分段",
+             fifelse(daily_screen_time_hours < 7.5, "中分段", "高分段"))]
 
 tab <- d[band != "高分段",
          .(n = .N, rate = mean(addicted_label)),
@@ -101,12 +101,12 @@ print(nb, row.names = FALSE)
 # =============================================================================
 hr("发现 5：标签近乎确定")
 # =============================================================================
-s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
+s <- train[!is.na(daily_screen_time_hours)]
 sb <- s[, .(n = .N, rate = mean(addicted_label)),
-        by = .(bin = floor(daily_screen_time_hours + social_media_hours))][order(bin)]
+        by = .(bin = floor(daily_screen_time_hours))][order(bin)]
 print(sb, row.names = FALSE)
-cat(sprintf("\n成瘾率从 %.3f 单调爬升到 %.3f，中间没有反复。\n",
-            sb[1, rate], sb[.N, rate]))
+cat(sprintf("\n成瘾率从 %.3f 爬升到 %.3f（%d 个间隔中 %d 处下降）。\n",
+            sb[1, rate], sb[.N, rate], nrow(sb) - 1L, sum(diff(sb$rate) < 0)))
 cat("数据完整时这道题几乎没有难度 —— 难度全部来自缺失。\n")
 
 # =============================================================================
@@ -134,10 +134,9 @@ mg <- train[!is.na(work_study_hours),
             by = .(bin = floor(work_study_hours / 2) * 2)][order(bin)]
 print(mg, row.names = FALSE)
 
-cat("\n条件视角（只看 screen + social < 6 的人）：\n")
+cat("\n条件视角（只看每日屏幕时间 < 4.5 小时的人）：\n")
 cd <- train[!is.na(work_study_hours) & !is.na(daily_screen_time_hours) &
-            !is.na(social_media_hours) &
-            daily_screen_time_hours + social_media_hours < 6,
+            daily_screen_time_hours < 4.5,
             .(n = .N, rate = mean(addicted_label)),
             by = .(bin = floor(work_study_hours / 2) * 2)][order(bin)]
 print(cd, row.names = FALSE)

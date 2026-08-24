@@ -172,8 +172,10 @@ p2a <- ggplot(one, aes(x = bin, y = rate)) +
   theme_proj(14)
 
 # --- (b) 真实标签 vs 打乱标签 ------------------------------------------------
-s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
-s[, score := daily_screen_time_hours + social_media_hours]
+# 用与 (a) 完全相同的变量和分箱，只把标签打乱。两条线的唯一差别就是标签，
+# 因此曲线塌平直接证明趋势来自特征与标签的真实关联，而非分箱操作本身。
+s <- train[!is.na(daily_screen_time_hours)]
+s[, score := daily_screen_time_hours]
 set.seed(42)
 s[, y_shuf := sample(addicted_label)]
 
@@ -183,6 +185,10 @@ shuf <- s[, .(n = .N, rate = mean(y_shuf)),
           by = .(bin = floor(score))][n > 500][order(bin)][, grp := "标签随机打乱（对照）"]
 cmp <- rbind(real, shuf)
 cmp[, grp := factor(grp, levels = c("真实标签", "标签随机打乱（对照）"))]
+RANGE_REAL <- diff(range(real$rate))
+RANGE_SHUF <- diff(range(shuf$rate))
+cat(sprintf("      对照检验：真实标签极差 %.3f，打乱后 %.3f\n",
+            RANGE_REAL, RANGE_SHUF))
 
 p2b <- ggplot(cmp, aes(x = bin, y = rate, color = grp, linetype = grp)) +
   geom_hline(yintercept = 0.7094, linetype = "dotted",
@@ -193,18 +199,21 @@ p2b <- ggplot(cmp, aes(x = bin, y = rate, color = grp, linetype = grp)) +
   scale_linetype_manual(values = c("solid", "dashed"), name = NULL) +
   scale_y_continuous(labels = percent_format(accuracy = 1),
                      breaks = seq(0, 1, 0.2), limits = c(0, 1)) +
-  scale_x_continuous(breaks = seq(0, 20, 4)) +
-  labs(subtitle = "(b) 对照检验：同样的「两变量相加再分箱」，打乱标签后曲线立刻塌平",
-       x = "屏幕时间 + 社交时间（小时）", y = NULL) +
+  scale_x_continuous(breaks = seq(0, 14, 2)) +
+  labs(subtitle = "(b) 对照检验：同一变量、同一分箱，仅把标签打乱",
+       x = "每日屏幕时间（小时）", y = NULL) +
   theme_proj(14) +
   theme(legend.position = "top")
 
 p2 <- (p2a | p2b) +
   plot_annotation(
     title    = "图 2  观测特征对标签的解释力",
-    subtitle = paste0("成瘾比例随使用时长上升，最高箱达 99.98%（13~16 箱仍有 127 个阴性样本，",
-                      "真正零阴性的仅占全量 1.4%）。\n右图证明该趋势并非「相加」这一操作的算术产物：",
-                      "打乱标签后极差由 0.862 降至 0.028。"),
+    subtitle = sprintf(paste0("成瘾比例随每日屏幕时间上升（%d 个间隔中 %d 处小幅回落，",
+                              "最大一次 %.3f）。右图为对照检验：同一变量、同一分箱，",
+                              "仅把标签随机打乱，\n极差即由 %.3f 塌到 %.3f —— ",
+                              "该趋势来自特征与标签的真实关联，而非分箱操作的产物。"),
+                       nrow(real) - 1L, sum(diff(real$rate) < 0),
+                       max(pmax(-diff(real$rate), 0)), RANGE_REAL, RANGE_SHUF),
     theme = theme(
       plot.title    = element_text(family = CN, face = "bold", size = 22),
       plot.subtitle = element_text(family = CN, size = 13, color = "grey30")
@@ -224,11 +233,10 @@ mg <- train[!is.na(work_study_hours),
 mg[, view := "边际视角（不控制任何变量）"]
 
 cd <- train[!is.na(work_study_hours) & !is.na(daily_screen_time_hours) &
-            !is.na(social_media_hours) &
-            daily_screen_time_hours + social_media_hours < 6,
+            daily_screen_time_hours < 4.5,
             .(n = .N, rate = mean(addicted_label)),
             by = .(bin = floor(work_study_hours / 2) * 2)][n > 1000][order(bin)]
-cd[, view := "条件视角（只看低屏幕时间人群）"]
+cd[, view := "条件视角（只看每日屏幕时间 < 4.5 小时的人群）"]
 
 sp <- rbind(mg, cd)
 sp[, view := factor(view, levels = unique(view))]
@@ -256,8 +264,8 @@ save_fig(p3, "fig3_Simpson悖论", w = 12, h = 6.5)
 # =============================================================================
 cat("[4/7] 天花板效应 ...\n")
 
-d <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
-d[, score := daily_screen_time_hours + social_media_hours]
+d <- train[!is.na(daily_screen_time_hours)]
+d[, score := daily_screen_time_hours]   # 使用强度分层：只用屏幕时间本身
 qs <- quantile(d$score, 0:5 / 5)
 BANDS <- c("最低 20%", "次低", "中间", "次高", "最高 20%")
 d[, band := cut(score, breaks = qs, include.lowest = TRUE, labels = BANDS)]
@@ -394,8 +402,8 @@ if (file.exists("output/ablation.rds")) {
   base <- mean(ab[["L1_full"]]$auc)
   keys <- c("L1_no_notif", "L1_no_opens", "L1_no_naind",
             "L1_no_cat3", "L1_no_age", "L1_noderiv")
-  nm <- c("每日通知数", "每日应用打开次数", "12 个缺失指示",
-          "性别 / 压力 / 学业影响", "年龄", "6 个派生特征")
+  nm <- c("每日通知数", "每日应用打开次数", "13 个缺失指示（已移除）",
+          "性别 / 压力 / 学业影响", "年龄", "6 个派生特征（其一已移除）")
 
   ad <- rbindlist(lapply(seq_along(keys), function(i) {
     if (is.null(ab[[keys[i]]])) return(NULL)
@@ -413,9 +421,10 @@ if (file.exists("output/ablation.rds")) {
     scale_fill_manual(values = c("TRUE" = RED, "FALSE" = TEAL), guide = "none") +
     coord_flip(ylim = c(-0.011, 0.004)) +
     labs(
-      title    = "图 6  特征消融：删掉它，AUC 变化多少",
-      subtitle = paste0("红色 = 删掉后明显变差，是真正有用的特征；",
-                        "青色 = 删掉几乎无影响"),
+      title    = "图 6  特征消融：删掉它，AUC 变化多少（基线为当时的 31 特征配置）",
+      subtitle = paste0("红色 = 删掉后明显变差，是真正有用的特征；青色 = 几乎无影响。",
+                        "
+本表即特征取舍的依据：标注「已移除」的两组据此从特征集中删去"),
       x = NULL, y = "AUC 变化量"
     ) +
     theme_proj()

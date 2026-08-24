@@ -16,9 +16,9 @@
 #   0 < alpha < 1  两者混合
 #
 # 本题的特征结构对这个选择有明确指向：
-#   - 特征只有 31 个，不需要大规模特征选择
-#   - 但共线性很强（other_screen 和 screen_social 是原始列的**精确线性
-#     组合**，设计矩阵秩亏；screen ↔ weekend 相关 0.80）
+#   - 特征只有 17 个，不需要大规模特征选择
+#   - 但共线性仍在（other_screen = screen - social - gaming 是原始列的
+#     **精确线性组合**，设计矩阵秩亏；screen ↔ weekend 相关 0.80）
 #   - 理论上 ridge 更适合处理共线性，lasso 在共线特征里会随机挑一个
 #
 # 所以先验预期是 alpha 偏小更好。跑一遍看实际情况。

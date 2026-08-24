@@ -16,9 +16,9 @@ for (v in c("notifications_per_day", "app_opens_per_day")) {
 }
 
 cat("\n\n==================== 条件于屏幕时间 ====================\n")
-d <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
-d[, score := daily_screen_time_hours + social_media_hours]
-# 按 screen+social 分成 5 段，段内看通知数的效应
+d <- train[!is.na(daily_screen_time_hours)]
+d[, score := daily_screen_time_hours]
+# 按屏幕时间分成 5 段，段内看通知数的效应
 d[, band := cut(score, breaks = quantile(score, 0:5/5), include.lowest = TRUE,
                 labels = c("最低20%","次低","中间","次高","最高20%"))]
 
