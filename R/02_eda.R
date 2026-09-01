@@ -22,22 +22,40 @@ hr <- function(title) cat("\n", strrep("=", 60), "\n", title, "\n",
                           strrep("=", 60), "\n", sep = "")
 
 # =============================================================================
-hr("发现 1：硬结构约束（预期 100.00%）")
+hr("发现 1：硬结构约束 —— 是四项，不是三项（预期 100.00%）")
 # =============================================================================
-# 屏幕时间 >= 社交 + 游戏。这不是统计相关，是结构性约束：
-# 屏幕时间本来就由社交 + 游戏 + 其他用途组成。
-cc <- train[!is.na(daily_screen_time_hours) &
-            !is.na(social_media_hours) &
+# ⚠ 本节曾经只验证三项版 daily >= social + gaming，那是不完整的。
+#   竞赛讨论区（ryota517 最先发布）用的是更紧的四项版本，我们复核后确认它同样
+#   100% 成立，且**残差最小值恰为 0.000**，而三项版最小值是 0.100。
+#
+#   残差最小值就是判据：三项版是被四项版蕴含的推论，
+#   四项版才是生成器真正强制执行的那条边界。
+#
+#   语义上的意外：work_study_hours 被算在屏幕时间**里面**（在手机上做的工作/学习）。
+#   这与发现 8 的隐含假设相反，见那一节的更正。
+#
+#   完整核查见 R/17_discussion_checks.R，缘由见 docs/讨论区核查.md 2.1。
+
+c3 <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours) &
             !is.na(gaming_hours)]
+c4 <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours) &
+            !is.na(gaming_hours) & !is.na(work_study_hours)]
 
-n_hold <- cc[, sum(daily_screen_time_hours >= social_media_hours + gaming_hours)]
-cat(sprintf("三列都不缺的行数    %s\n", format(nrow(cc), big.mark = ",")))
-cat(sprintf("约束成立的行数      %s\n", format(n_hold, big.mark = ",")))
-cat(sprintf("成立比例            %.4f%%\n", 100 * n_hold / nrow(cc)))
+r3 <- c3[, daily_screen_time_hours - social_media_hours - gaming_hours]
+r4 <- c4[, daily_screen_time_hours -
+           (social_media_hours + gaming_hours + work_study_hours)]
 
-other <- cc[, daily_screen_time_hours - social_media_hours - gaming_hours]
-cat(sprintf("\nother_screen（第三分量）  均值 %.2f  标准差 %.2f  最小值 %.2f\n",
-            mean(other), sd(other), min(other)))
+cat(sprintf("三项 daily >= social + gaming          %8.4f%%  （%s 行）  残差最小值 %.3f\n",
+            100 * mean(r3 >= 0), format(nrow(c3), big.mark = ","), min(r3)))
+cat(sprintf("四项 daily >= social + gaming + work   %8.4f%%  （%s 行）  残差最小值 %.3f  <- 真正的边界\n",
+            100 * mean(r4 >= 0), format(nrow(c4), big.mark = ","), min(r4)))
+
+cat(sprintf("\nresid4（预算余量）均值 %.3f  标准差 %.3f\n", mean(r4), sd(r4)))
+cat(sprintf("resid3（旧口径）  均值 %.3f  标准差 %.3f\n", mean(r3), sd(r3)))
+cat(sprintf("两者相关 %.4f —— 不是同一列\n",
+            c4[, cor(daily_screen_time_hours - social_media_hours - gaming_hours,
+                     daily_screen_time_hours -
+                       (social_media_hours + gaming_hours + work_study_hours))]))
 
 # =============================================================================
 hr("发现 2：周末屏幕时间是冗余代理")
@@ -147,15 +165,116 @@ cat(sprintf("\n方向完全相反。成因：screen 与 work 的相关是 %+.4f 
 cat("边际上看到的正相关，完全是屏幕时间这个混淆变量制造的假象。\n")
 
 # =============================================================================
-hr("发现 8：「空闲时间」假设不成立")
+hr("发现 8（已更正）：「空闲时间」是硬约束 —— 我们原先把 work 减了两遍")
 # =============================================================================
+# ⚠ 本节的原结论是错的，错因由发现 1 的更正直接暴露出来。
+#
+#   原口径：24 - sleep - work - screen  →  1.84% 为负，于是我们断定
+#           「不是硬约束，只能当软特征用」。
+#
+#   但发现 1 证明 work_study_hours 被算在 screen **里面**
+#   （daily >= social + gaming + work 恒成立）。所以那个式子把 work 减了两遍，
+#   负值是我们自己造出来的。
+#
+#   去掉重复扣减之后，它是一个干净的硬约束。
+
 f <- train[!is.na(sleep_hours) & !is.na(work_study_hours) &
            !is.na(daily_screen_time_hours),
            24 - sleep_hours - work_study_hours - daily_screen_time_hours]
-cat(sprintf("24 - sleep - work - screen   均值 %.2f  标准差 %.2f\n", mean(f), sd(f)))
-cat(sprintf("负值比例 %.2f%% —— 不是硬约束，只能当软特征用。\n",
-            100 * mean(f < 0)))
+g <- train[!is.na(sleep_hours) & !is.na(daily_screen_time_hours),
+           24 - sleep_hours - daily_screen_time_hours]
+
+cat(sprintf("旧口径 24 - sleep - work - screen   均值 %.2f  最小 %+.2f  负值 %.2f%%\n",
+            mean(f), min(f), 100 * mean(f < 0)))
+cat(sprintf("新口径 24 - sleep - screen          均值 %.2f  最小 %+.2f  负值 %.2f%%  <- 硬约束\n",
+            mean(g), min(g), 100 * mean(g < 0)))
+cat("\n=> 「一天只有 24 小时」这个假设是成立的，当初测出 1.84% 负值\n")
+cat("   纯粹是因为 work_study 被扣了两次。R/03_features.R 的 free_frac\n")
+cat("   分母已随之更正。详见 docs/讨论区核查.md 2.1。\n")
+
+# =============================================================================
+hr("发现 10：生成器把硬规则抹成了平滑场")
+# =============================================================================
+# 这一条解释了一件我们长期没解释的事：为什么模型能到 0.96，
+# 而「看起来就是全部信号」的两条规则只有 0.86。
+#
+# 原始 7500 行数据集本质上是一张两规则查找表（竞赛讨论区第 52 帖）：
+#   p = 1    若 daily > 8  或 social > 4
+#   p = 0    若 daily <= 6 且 social <= 4
+#   p = 0.5  其他（占原始数据 14%，纯抛硬币）
+# 这两条规则在**原始**数据上 AUC 0.9888。
+#
+# 在**竞赛**数据上跑同样的规则，边界不见了。差出来的那一截就是生成器加进去的结构。
+
+s <- train[!is.na(daily_screen_time_hours) & !is.na(social_media_hours)]
+rule <- rep(0.5, nrow(s))
+rule[s$daily_screen_time_hours > 8 | s$social_media_hours > 4] <- 1
+rule[s$daily_screen_time_hours <= 6 & s$social_media_hours <= 4] <- 0
+
+auc_rule <- local({
+  r <- rank(rule, ties.method = "average")
+  n1 <- as.numeric(sum(s$addicted_label == 1)); n0 <- nrow(s) - n1
+  (sum(r[s$addicted_label == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+})
+cat(sprintf("两规则在竞赛数据上的 AUC  %.5f  （原始数据上是 0.9888）\n", auc_rule))
+cat(sprintf("  规则判 1 的区域 实际正例率 %.4f （原始应为 1.000）\n",
+            s[daily_screen_time_hours > 8 | social_media_hours > 4, mean(addicted_label)]))
+cat(sprintf("  规则判 0 的区域 实际正例率 %.4f （原始应为 0.000）\n",
+            s[daily_screen_time_hours <= 6 & social_media_hours <= 4, mean(addicted_label)]))
+mid <- s[daily_screen_time_hours > 6 & daily_screen_time_hours <= 8 & social_media_hours <= 4]
+cat(sprintf("  「中间区」占 %.1f%%，正例率 %.4f （原始数据是抛硬币 0.456）\n",
+            100 * nrow(mid) / nrow(s), mid[, mean(addicted_label)]))
+cat("\n=> 生成器不只把硬规则模糊化了，它在原本是纯噪声的中间区**写入了真实结构**。\n")
+cat("   所以标签不是一个确定函数，而是一个平滑概率场的伯努利抽样 ——\n")
+cat("   而 AUC 奖励的正是拟合那个场。这也是发现 5 的机制。\n")
+
+# =============================================================================
+hr("发现 11：生成器的舍入格点 —— 小数位携带信号")
+# =============================================================================
+# 取值被写在 0.01 的格点上。第一位小数让正例率摆动最多 0.1047，
+# 而手机使用行为解释不了这件事：这纯粹是生成器写数字的方式。
+#
+# 关键在于**这是 target encoding 捡不起来的**：编码把每个精确取值分开处理，
+# 无法把「所有以 .2 结尾的」汇集起来。所以它和按取值编码是互补而非重复。
+
+cat(sprintf("%-26s %8s %8s\n", "列", "第1位", "第2位"))
+for (cc in c("weekend_screen_time", "daily_screen_time_hours", "sleep_hours",
+             "social_media_hours", "gaming_hours", "work_study_hours")) {
+  dd <- train[!is.na(get(cc))]
+  iv <- as.integer(round(dd[[cc]] * 100))
+  s1 <- dd[, .(r = mean(addicted_label)), by = .(k = (iv %/% 10L) %% 10L)][, diff(range(r))]
+  s2 <- dd[, .(r = mean(addicted_label)), by = .(k =  iv %% 10L)][, diff(range(r))]
+  cat(sprintf("%-26s %8.4f %8.4f\n", cc, s1, s2))
+}
+cat("\n每个数字背后有 5~7 万行，单元格标准误约 0.0019，所以 0.085 约为 45 个标准误。\n")
+cat("⚠ 与讨论区第 28 帖不一致：对方称第二位小数「一文不值」。我们测出六列中有三列
+")
+cat("  （weekend / social / gaming）第二位摆幅**不低于甚至大于**第一位。两位都进候选。
+")
+
+# =============================================================================
+hr("发现 12：训练/测试的缺失率逐列不同（与发现 6 不矛盾）")
+# =============================================================================
+# 发现 6 说的是「缺失与**目标**无关」。这一条说的是「缺失与**划分身份**强相关」。
+# 两句都对，问的是不同的问题 ——
+# 一个不说明自己指哪一个的句子，就会被读成另一个。
+
+test <- readRDS("output/raw_test.rds")
+cols12 <- c(num_cols, "gender", "stress_level", "academic_work_impact")
+a <- sapply(cols12, function(c) mean(is.na(train[[c]])))
+b <- sapply(cols12, function(c) mean(is.na(test[[c]])))
+n1 <- nrow(train); n2 <- nrow(test)
+pb <- (a * n1 + b * n2) / (n1 + n2)
+z  <- (b - a) / sqrt(pb * (1 - pb) * (1 / n1 + 1 / n2))
+mr <- data.table(col = cols12, train_pct = round(100 * a, 2),
+                 test_pct = round(100 * b, 2), diff_pp = round(100 * (b - a), 2),
+                 z = round(z, 1))[order(diff_pp)]
+print(mr, row.names = FALSE)
+cat(sprintf("\n12 列全部不同，|z| 从 %.1f 到 %.1f；%d 列测试集缺失更多，%d 列更少。\n",
+            min(abs(z)), max(abs(z)), sum(b > a), sum(b < a)))
+cat("=> 这是不做缺失指示的**第二个独立理由**：它们编码划分身份。\n")
+cat("   也意味着在训练集上拟合的填补统计量，面对的缺失混合与测试集不同。\n")
 
 cat("\n", strrep("=", 60), "\n", sep = "")
-cat("全部 8 个发现复现完毕。\n")
+cat("全部 12 个发现复现完毕（发现 9 天花板效应在 R/09_interaction.R）。\n")
 cat("E：请把发现 1、4、5、7 做成图，这四个最能一眼看出结论。\n")

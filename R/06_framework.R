@@ -12,8 +12,12 @@
 #
 # 可选：
 #   SEED         默认 20260821
-#   USE_DERIVED  默认 TRUE。设 FALSE 则不计算 6 个派生特征
+#   USE_DERIVED  默认 TRUE。设 FALSE 则不计算 5 个派生特征
 #                （消融已证明它们无效，见项目说明 6.6）
+#   USE_TE       默认 TRUE。逐取值 target encoding，在**折内**拟合。
+#                这是本项目单项收益最大的一步（+0.00391，5/5 折同号），
+#                因为数据被舍入到一个格点上、精确取值本身携带非单调信息。
+#                设 FALSE 关闭，用于复现「没有它」的对照。
 #   REPEAT_ID    默认 0。非 0 时用不同的折划分做重复 CV，
 #                供统计稳健性检验使用（见 09_repeated_cv.R）
 #   QUIET        默认 FALSE
@@ -38,6 +42,7 @@ for (v in c("MODEL_NAME", "TIER", "IMPUTE_LINE", "fit_predict")) {
 }
 if (!exists("SEED"))        SEED        <- 20260821L
 if (!exists("USE_DERIVED")) USE_DERIVED <- TRUE
+if (!exists("USE_TE"))      USE_TE      <- TRUE
 if (!exists("REPEAT_ID"))   REPEAT_ID   <- 0L
 if (!exists("QUIET"))       QUIET       <- FALSE
 
@@ -49,6 +54,8 @@ if (nzchar(Sys.getenv("TIER")))      TIER        <- Sys.getenv("TIER")
 if (nzchar(Sys.getenv("REPEAT_ID"))) REPEAT_ID   <- as.integer(Sys.getenv("REPEAT_ID"))
 if (nzchar(Sys.getenv("USE_DERIVED")))
   USE_DERIVED <- !(Sys.getenv("USE_DERIVED") %in% c("0", "FALSE", "false"))
+if (nzchar(Sys.getenv("USE_TE")))
+  USE_TE <- !(Sys.getenv("USE_TE") %in% c("0", "FALSE", "false"))
 
 say <- function(...) if (!QUIET) cat(...)
 
@@ -98,9 +105,10 @@ if (REPEAT_ID > 0L) {
 
 .derive <- if (USE_DERIVED) derive_features else function(dt) dt
 
-say(sprintf("模型 %s | Tier %s | %s 行 | 插补 %s | 派生特征 %s%s\n",
+say(sprintf("模型 %s | Tier %s | %s 行 | 插补 %s | 派生 %s | TE %s%s\n",
             MODEL_NAME, TIER, format(nrow(X_pool), big.mark = ","),
             IMPUTE_LINE, if (USE_DERIVED) "开" else "关",
+            if (USE_TE) "开" else "关",
             if (REPEAT_ID > 0L) sprintf(" | 重复 #%d", REPEAT_ID) else ""))
 
 # ---- 交叉验证主循环 ---------------------------------------------------------
@@ -126,6 +134,21 @@ for (k in sort(unique(f_pool))) {
   # 3. 插补之后才算派生特征
   X_tr <- .derive(X_tr)
   X_va <- .derive(X_va)
+
+  # 3.5 逐取值 target encoding —— 必须在折内拟合
+  #
+  # ⚠ 这一步和第 1 步是同一条纪律：编码器只能看训练折的 y。
+  #   讨论区第 34 帖有人在 CV 循环**之外**交叉拟合编码器，以为
+  #   「只要用同一套 k 折就没问题」—— broccoli beef 推导出那是泄漏：
+  #   第 k 次迭代里 X₋ₖ 中每个样本都是用含 yₖ 的统计量编码的。
+  #   原作者改到折内之后公榜大跌，说明原来的 CV 是虚高的。
+  #
+  #   注意验证折 X_va 只是**被应用**编码，从不参与拟合。
+  if (USE_TE) {
+    .te  <- fit_target_encoder(X_tr, y_pool[tr])
+    X_tr <- apply_target_encoder(.te, X_tr)
+    X_va <- apply_target_encoder(.te, X_va)
+  }
 
   # 4. 训练 + 预测（早停在 fit_predict 内部完成）
   pred <- fit_predict(X_tr, y_pool[tr], X_va)
@@ -157,7 +180,7 @@ dir.create("output/oof",  showWarnings = FALSE, recursive = TRUE)
 dir.create("output/test", showWarnings = FALSE, recursive = TRUE)
 
 .meta <- list(model = MODEL_NAME, tier = TIER, impute = IMPUTE_LINE,
-              use_derived = USE_DERIVED, repeat_id = REPEAT_ID,
+              use_derived = USE_DERIVED, use_te = USE_TE, repeat_id = REPEAT_ID,
               fold_auc = fold_auc, cv_mean = cv_mean, cv_sd = cv_sd,
               oof_auc = oof_auc, best_iter = best_iter, minutes = elapsed)
 
@@ -181,6 +204,12 @@ if (REPEAT_ID > 0L) {
   imp    <- .fit_imputer(X_pool)
   X_full <- .derive(.apply_imputer(imp, copy(X_pool)))
   X_test <- .derive(.apply_imputer(imp, copy(.test_all)))
+  if (USE_TE) {
+    # 全量训练池上拟合，应用到 test。test 没有标签，所以不存在泄漏。
+    .te    <- fit_target_encoder(X_full, y_pool)
+    X_full <- apply_target_encoder(.te, X_full)
+    X_test <- apply_target_encoder(.te, X_test)
+  }
   pred_test <- as.numeric(fit_predict(X_full, y_pool, X_test))
 
   saveRDS(pred_test, sprintf("output/test/test_%s.rds", MODEL_NAME))

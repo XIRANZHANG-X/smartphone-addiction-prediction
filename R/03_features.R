@@ -45,11 +45,19 @@ derive_features <- function(dt) {
     ifelse(is.na(num) | is.na(den) | den <= 0, NA_real_, num / den)
   }
 
-  # --- 发现 1：屏幕时间的第三分量 -------------------------------------------
-  # daily_screen >= social + gaming 在 451,246 行中 100% 成立，
-  # 所以这一列在数据完整时保证 >= 0（均值 3.71，标准差 1.94）。
-  # 它代表"既不是社交也不是游戏"的屏幕时间：浏览器、视频、办公等。
-  dt[, other_screen := daily_screen_time_hours - social_media_hours - gaming_hours]
+  # --- 发现 1：预算余量（四项残差）------------------------------------------
+  # ⚠ 这一列曾经只减两项，那是错的。生成器强制的约束是**四项**：
+  #     daily >= social + gaming + work_study   在 421,427 行上 100% 成立，
+  #     且残差最小值恰为 0.000（三项版最小值 0.100 —— 说明它只是推论）。
+  #
+  # 为什么这一列树替代不了：一次分裂是一个特征加一个阈值。四项的边界要树
+  # 用矩形去铺一张超平面，无论多深都到不了；直接给它就是一次分裂的事。
+  # 实测证实了这一点 —— 它是唯一在 target encoding 之上仍然有效的派生特征
+  #（+0.00064，5/5 折同号），而 max_bin 与小数位特征都被 TE 完全吸收了。
+  #
+  # 语义：work_study 是**在手机上做的**工作/学习，所以它在屏幕时间之内。
+  dt[, other_screen := daily_screen_time_hours -
+                       (social_media_hours + gaming_hours + work_study_hours)]
 
   # --- 发现 2：周末与日常的比值 ---------------------------------------------
   # 两列相关 +0.80，比值稳定在 1.33 左右（标准差 0.50）。
@@ -61,11 +69,11 @@ derive_features <- function(dt) {
   dt[, social_share := safe_div(social_media_hours, daily_screen_time_hours)]
   dt[, gaming_share := safe_div(gaming_hours,       daily_screen_time_hours)]
 
-  # --- 发现 8：空闲时间占比（软特征） ---------------------------------------
-  # 24 - 睡眠 - 工作 = 理论可支配时间。注意这不是硬约束：
-  # 实测有 1.84% 的行算出来是负数，所以 safe_div 会把它们变成 NA。
-  dt[, free_frac := safe_div(daily_screen_time_hours,
-                             24 - sleep_hours - work_study_hours)]
+  # --- 发现 8（已更正）：空闲时间占比 ---------------------------------------
+  # ⚠ 分母曾经是 24 - sleep - work，那把 work 减了两遍 —— 由发现 1 可知
+  #   work 已经在 screen 里面。当初测出的 1.84% 负值是我们自己造出来的。
+  #   去掉重复扣减后：24 - sleep 的最小值是 +3.99，是干净的硬约束。
+  dt[, free_frac := safe_div(daily_screen_time_hours, 24 - sleep_hours)]
 
   # --- 已移除：screen_social = 屏幕时间 + 社交时间 --------------------------
   # 由发现 1 可知 social 本身就是 screen 的一个分量，二者相加等价于
@@ -81,6 +89,86 @@ derive_features <- function(dt) {
 # 派生特征的列名，供下游做特征选择/消融时引用
 DERIVED_COLS <- c("other_screen", "weekend_ratio", "social_share",
                   "gaming_share", "free_frac")
+
+# -----------------------------------------------------------------------------
+# 逐取值 target encoding（发现 10、11：生成器的格点）
+# -----------------------------------------------------------------------------
+# 为什么这不是普通的"类别特征编码"
+# -----------------------------------------------------------------------------
+# 这份数据是生成出来、并被舍入到一个格点上的（发现 11）。所以**精确取值**本身
+# 携带信息，而且这个信息是**非单调**的：把取值当成一个量级去分裂，
+# 捕捉不到"5.23 这个值恰好对应什么"。
+#
+# 样本内查找表的上界（R/17_discussion_checks.R 核查 6）：
+#   daily_screen_time_hours   查找表 0.90197  vs  原始值 0.88955
+#   weekend_screen_time       查找表 0.89523  vs  原始值 0.88099
+# 差出来的就是原始值的单调排序捕捉不到的那部分。
+#
+# 折内实测（R/18_new_features.R）：+0.00391，Cohen's d = 6.57，5/5 折同号，
+# 而安慰剂列是 −0.00010、1/5 同号。这是本项目**单项收益最大的一次改动**，
+# 超过了四条插补线之间的全部差距（0.00297）。
+#
+# -----------------------------------------------------------------------------
+# ⚠ 纪律：只能在训练折内部拟合
+# -----------------------------------------------------------------------------
+# 讨论区第 34 帖有一次现成的教训：有人在 CV 循环**之外**交叉拟合编码器，
+# 以为"只要用同一套 k 折就没问题"。broccoli beef 推导出这是泄漏 ——
+# 在第 k 次迭代里，X₋ₖ 中的每个样本都是用含 yₖ 的统计量编码的。
+# 原作者改到折内之后**公榜大跌**，说明原来的 CV 是虚高的。
+#
+# 所以这两个函数被设计成 fit / apply 分离，与插补器同一个形状，
+# 由 R/06_framework.R 在折内调用。不要在别处调 fit。
+# =============================================================================
+
+#' 参与 target encoding 的列
+#'
+#' 只对**数值**列做。类别列本来就是少数几个水平，树自己处理即可。
+TE_COLS <- c("daily_screen_time_hours", "social_media_hours",
+             "weekend_screen_time", "gaming_hours",
+             "work_study_hours", "sleep_hours",
+             "notifications_per_day", "app_opens_per_day")
+
+#' 平滑强度：稀疏取值向全局均值收缩的力度
+#'
+#' (sum_y + prior*m) / (n + m)。m = 20 意味着一个只出现 20 次的取值，
+#' 其编码有一半来自先验。取值数最多的列有 1437 个不同取值、69 万行，
+#' 所以多数取值的 n 在数百量级，m=20 只影响长尾。
+TE_SMOOTH <- 20
+
+.te_table <- function(v, y, prior) {
+  d <- data.table(v = v, y = y)[!is.na(v)]
+  tb <- d[, .(s = sum(y), n = .N), by = v]
+  tb[, enc := (s + prior * TE_SMOOTH) / (n + TE_SMOOTH)]
+  tb[, .(v, enc)]
+}
+
+#' 在训练折上拟合编码器
+#'
+#' @param X 训练折的特征（data.table）
+#' @param y 训练折的标签
+#' @return 一个可以喂给 apply_target_encoder() 的对象
+fit_target_encoder <- function(X, y) {
+  prior <- mean(y)
+  list(prior = prior,
+       maps  = lapply(setNames(TE_COLS, TE_COLS),
+                      function(cc) .te_table(X[[cc]], y, prior)))
+}
+
+#' 把编码器应用到任意一份数据上（原地加 te_* 列）
+#'
+#' 训练折里没出现过的取值、以及本来就缺失的取值，都回落到训练折的全局均值。
+#' 让这两种情况共享同一个含义是有意的：对模型来说它们都是"这里没有信息"。
+apply_target_encoder <- function(enc, dt) {
+  stopifnot(is.data.table(dt))
+  for (cc in names(enc$maps)) {
+    e <- enc$maps[[cc]][data.table(v = dt[[cc]]), on = "v", x.enc]
+    set(dt, j = paste0("te_", cc), value = fifelse(is.na(e), enc$prior, e))
+  }
+  dt[]
+}
+
+#' te_* 列名，供消融/重要性引用
+TE_OUT_COLS <- paste0("te_", TE_COLS)
 
 # -----------------------------------------------------------------------------
 # 构建批一：features_raw
