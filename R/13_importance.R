@@ -67,8 +67,14 @@ CN_NAME <- c(
   gaming_share            = "游戏占比（派生）",
   free_frac               = "空闲时间占比（派生）"
 )
+CN_TE <- c(daily_screen_time_hours = "每日屏幕时间", social_media_hours = "社交媒体时间",
+           weekend_screen_time = "周末屏幕时间", gaming_hours = "游戏时间",
+           work_study_hours = "工作学习时间", sleep_hours = "睡眠时间",
+           notifications_per_day = "每日通知数", app_opens_per_day = "每日应用打开次数")
 pretty_name <- function(x) {
   out <- CN_NAME[x]
+  te <- grepl("^te_", x) & is.na(out)
+  out[te] <- paste0("取值编码：", CN_TE[sub("^te_", "", x[te])])
   out[is.na(out)] <- ifelse(grepl("^is_na_", x[is.na(out)]),
                             paste0("缺失指示：", CN_NAME[sub("^is_na_", "", x[is.na(out)])]),
                             x[is.na(out)])
@@ -94,6 +100,12 @@ va <- which(f_pool == 1L)
 imp  <- fit_imputer_L1(X_pool[tr])
 X_tr <- derive_features(apply_imputer_L1(imp, copy(X_pool[tr])))
 X_va <- derive_features(apply_imputer_L1(imp, copy(X_pool[va])))
+
+# 逐取值 target encoding —— 与 06_framework.R 同一条纪律：只在训练折上拟合。
+# 不加这一步，重要性表就描述的是一个我们已经不再使用的特征集。
+.te  <- fit_target_encoder(X_tr, y_pool[tr])
+X_tr <- apply_target_encoder(.te, X_tr)
+X_va <- apply_target_encoder(.te, X_va)
 y_tr <- y_pool[tr]; y_va <- y_pool[va]
 
 use_cols <- setdiff(names(X_tr), c("id", "addicted_label", "is_train"))
