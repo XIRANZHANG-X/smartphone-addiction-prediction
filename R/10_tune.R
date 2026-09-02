@@ -64,9 +64,8 @@ eval_params <- function(params, line = "L1", n_fold = N_FOLD_SEARCH) {
   for (k in seq_len(n_fold)) {
     set.seed(SEED + k)
     tr <- which(f_pool != k); va <- which(f_pool == k)
-    imp  <- fit_i(X_pool[tr])
-    X_tr <- derive_features(apply_i(imp, copy(X_pool[tr])))
-    X_va <- derive_features(apply_i(imp, copy(X_pool[va])))
+    fold <- prepare_fold(X_pool[tr], y_pool[tr], X_pool[va], fit_i, apply_i)
+    X_tr <- fold$tr; X_va <- fold$va
     p <- fp(X_tr, y_pool[tr], X_va)
     bi <- attr(p, "best_iteration"); if (!is.null(bi)) iters <- c(iters, bi)
     a <- c(a, as.numeric(auc(roc(y_pool[va], as.numeric(p), quiet = TRUE))))

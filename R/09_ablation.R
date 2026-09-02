@@ -87,9 +87,9 @@ run_variant <- function(line, drop = character(0)) {
   for (k in sort(unique(f_pool))) {
     set.seed(SEED + k)
     tr <- which(f_pool != k); va <- which(f_pool == k)
-    imp  <- fit_i(X_pool[tr])
-    X_tr <- derive_features(apply_i(imp, copy(X_pool[tr])))
-    X_va <- derive_features(apply_i(imp, copy(X_pool[va])))
+    # 插补 -> 派生 -> 逐取值编码，三条纪律固化在 prepare_fold() 里
+    fold <- prepare_fold(X_pool[tr], y_pool[tr], X_pool[va], fit_i, apply_i)
+    X_tr <- fold$tr; X_va <- fold$va
     if (is.na(nf)) nf <- length(setdiff(names(X_tr),
                        c("id", "addicted_label", "is_train", drop)))
     p <- fp(X_tr, y_pool[tr], X_va)

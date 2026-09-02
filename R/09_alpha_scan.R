@@ -57,9 +57,9 @@ for (a in ALPHAS) {
   for (k in seq_len(N_FOLD)) {
     set.seed(SEED + k)
     tr <- which(f_pool != k); va <- which(f_pool == k)
-    imp  <- fit_imputer_L3(X_pool[tr])
-    X_tr <- derive_features(apply_imputer_L3(imp, copy(X_pool[tr])))
-    X_va <- derive_features(apply_imputer_L3(imp, copy(X_pool[va])))
+    fold <- prepare_fold(X_pool[tr], y_pool[tr], X_pool[va],
+                         fit_imputer_L3, apply_imputer_L3)
+    X_tr <- fold$tr; X_va <- fold$va
     p <- fp(X_tr, y_pool[tr], X_va)
     aucs <- c(aucs, as.numeric(auc(roc(y_pool[va], p, quiet = TRUE))))
   }

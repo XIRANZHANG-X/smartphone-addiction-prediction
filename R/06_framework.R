@@ -124,31 +124,16 @@ for (k in sort(unique(f_pool))) {
   tr <- which(f_pool != k)
   va <- which(f_pool == k)
 
-  # 1. 插补器只看训练折
-  imp <- .fit_imputer(X_pool[tr])
-
-  # 2. 变换两边
-  X_tr <- .apply_imputer(imp, copy(X_pool[tr]))
-  X_va <- .apply_imputer(imp, copy(X_pool[va]))
-
-  # 3. 插补之后才算派生特征
-  X_tr <- .derive(X_tr)
-  X_va <- .derive(X_va)
-
-  # 3.5 逐取值 target encoding —— 必须在折内拟合
+  # 1~3. 插补 -> 派生 -> 逐取值编码
   #
-  # ⚠ 这一步和第 1 步是同一条纪律：编码器只能看训练折的 y。
-  #   讨论区第 34 帖有人在 CV 循环**之外**交叉拟合编码器，以为
-  #   「只要用同一套 k 折就没问题」—— broccoli beef 推导出那是泄漏：
-  #   第 k 次迭代里 X₋ₖ 中每个样本都是用含 yₖ 的统计量编码的。
-  #   原作者改到折内之后公榜大跌，说明原来的 CV 是虚高的。
-  #
-  #   注意验证折 X_va 只是**被应用**编码，从不参与拟合。
-  if (USE_TE) {
-    .te  <- fit_target_encoder(X_tr, y_pool[tr])
-    X_tr <- apply_target_encoder(.te, X_tr)
-    X_va <- apply_target_encoder(.te, X_va)
-  }
+  # 三条纪律（插补器只看训练折、派生在插补之后、编码器只看训练折）
+  # 全部固化在 R/03_features.R 的 prepare_fold() 里，那是唯一定义处。
+  # 各分析脚本（消融、alpha 扫描、调参）调的是同一个函数 ——
+  # 此前它们各自复制了一份，加 target encoding 时就漏掉了三个。
+  .fold <- prepare_fold(X_pool[tr], y_pool[tr], X_pool[va],
+                        .fit_imputer, .apply_imputer,
+                        use_derived = USE_DERIVED, use_te = USE_TE)
+  X_tr <- .fold$tr; X_va <- .fold$va
 
   # 4. 训练 + 预测（早停在 fit_predict 内部完成）
   pred <- fit_predict(X_tr, y_pool[tr], X_va)

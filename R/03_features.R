@@ -264,3 +264,43 @@ if (FORCE_REBUILD || !file.exists(file.path("output", "features_raw.rds"))) {
   cat("features_raw.rds 已存在，跳过构建。\n")
   cat("（需要强制重建：FORCE_REBUILD <- TRUE 后重新 source）\n")
 }
+
+# -----------------------------------------------------------------------------
+# 一折内部的完整特征准备（唯一真源）
+# -----------------------------------------------------------------------------
+# 为什么要有这个函数
+#
+# 「一折的特征长什么样」曾经被复制在五六个地方：框架一份、消融一份、
+# alpha 扫描一份、调参一份……。加入 target encoding 时，只有走框架的脚本
+# 自动跟上了，另外三个还停在旧口径 —— 也就是说它们测的是一个我们已经
+# 不再使用的特征集，而这件事在跑出结果之前是看不出来的。
+#
+# 现在只有这一处定义。加一个新变换只需改这里。
+#
+# 三条纪律都固化在这里，调用方无法绕过：
+#   1. 插补器只在训练部分拟合
+#   2. 派生特征在插补**之后**算（否则比值型特征全是 NA）
+#   3. target encoder 也只在训练部分拟合（与插补同一条规矩）
+
+#' @param X_tr,X_va 训练/验证部分（会被复制，不修改原对象）
+#' @param y_tr      训练部分的标签 —— 只有它能被 target encoder 看到
+#' @param fit_imputer,apply_imputer 一条插补线的两个函数
+#' @param use_derived,use_te 开关，用于消融对照
+#' @return list(tr, va)
+prepare_fold <- function(X_tr, y_tr, X_va, fit_imputer, apply_imputer,
+                         use_derived = TRUE, use_te = TRUE) {
+  imp <- fit_imputer(X_tr)                       # 1. 只看训练部分
+  A <- apply_imputer(imp, data.table::copy(X_tr))
+  B <- apply_imputer(imp, data.table::copy(X_va))
+
+  if (use_derived) {                             # 2. 插补之后才算派生
+    A <- derive_features(A)
+    B <- derive_features(B)
+  }
+  if (use_te) {                                  # 3. 编码器同样只看训练部分
+    e <- fit_target_encoder(A, y_tr)
+    A <- apply_target_encoder(e, A)
+    B <- apply_target_encoder(e, B)
+  }
+  list(tr = A, va = B)
+}

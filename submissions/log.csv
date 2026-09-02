@@ -1,34 +1,35 @@
 ﻿date,submission_file,method,cv_auc,cv_sd,lb_public,notes
-2026/8/21,,L1_xgboost_tierA,0.9591,0.0013,,【早停前】固定600轮基线：原生NaN+xgboost，Tier A 200k
-2026/8/21,,L2_xgboost_tierA,0.95871,0.00132,,【早停前】中位数填补
-2026/8/21,,L3_xgboost_tierA,0.95804,0.00128,,【早停前】条件均值插补，三条线最差
-2026/8/21,,L4_xgboost_tierA,0.95618,0.00116,,【早停前】PMM随机插补，xgboost上最差
-2026/8/21,,L2_glmnet_tierA,0.91775,0.00151,,【早停前】中位数填补+elastic net
-2026/8/21,,L3_glmnet_tierA,0.92841,0.00128,,【早停前】条件均值插补+elastic net，方向反转
-2026/8/23,,L1_xgboost_tierA,0.96088,0.00125,,【加早停】+0.00178 vs 固定600轮，早停选1158轮
-2026/8/23,,L2_xgboost_tierA,0.96047,0.00126,,【加早停】Tier A
-2026/8/23,,L3_xgboost_tierA,0.95951,0.00115,,【加早停】Tier A
-2026/8/23,,L4_xgboost_tierA,0.95791,0.00126,,【加早停】Tier A
-2026/8/23,,L1_lightgbm_tierA,0.95983,0.00122,,【加早停】lightgbm复现了xgboost的排序
-2026/8/23,,L2_lightgbm_tierA,0.95975,0.00125,,【加早停】Tier A
-2026/8/23,,L3_lightgbm_tierA,0.95957,0.00118,,【加早停】Tier A
-2026/8/23,,L4_lightgbm_tierA,0.95704,0.0011,,【加早停】Tier A
-2026/8/23,,L2_ranger_tierA,0.9396,0.00107,,【加早停】ranger必须插补
-2026/8/23,,L3_ranger_tierA,0.9398,0.00109,,【加早停】ranger上L3反超L2，方向与GBDT相反
-2026/8/23,,L4_ranger_tierA,0.93581,0.00136,,【加早停】Tier A
-2026/8/23,,L2_glmnet_tierA,0.9178,0.0015,,【加早停】Tier A
-2026/8/23,,L3_glmnet_tierA,0.92825,0.00124,,【加早停】glmnet上L3反超L2 +0.01045，n=15下p<0.0001
-2026/8/23,,L4_glmnet_tierA,0.91572,0.00148,,【加早停】Tier A
-2026/8/23,,tuned_L1_xgboost,0.96145,,,调参最优eta=0.05 depth=4，+0.00066；排序不翻转
-2026/8/24,,L1_xgboost_tierB,0.96454,,,全量69万重训，比Tier A高+0.00366
-2026/8/24,,L2_xgboost_tierB,0.96402,,,全量69万重训
-2026/8/24,,L1_lightgbm_tierB,0.96368,,,全量69万重训
-2026/8/24,,L2_lightgbm_tierB,0.96363,,,全量69万重训
-2026/8/24,,L3_lightgbm_tierB,0.9633,,,全量69万重训
-2026/8/24,,L3_ranger_tierB,0.94126,,,全量69万重训，多样性成员
-2026/8/24,,L3_glmnet_tierB,0.92778,,,全量69万重训，唯一没从更多数据获益的模型(-0.00047)
-2026/8/24,submission_20260824_0017_hillclimb.csv,ensemble_hillclimb,0.96477,,0.96613,7成员爬山法集成；最好单模型L1_xgboost 0.96453，集成仅提升+0.00024
-2026/8/24,submission_20260824_0916_hillclimb.csv,hillclimb,0.96477,,,作废：调参版撞 max_rounds=3000 上限被截断，未提交
-2026/8/24,,L1_xgboost_tuned_tierB,0.96465,0.00043,,depth=4 全量；需4405轮（默认depth=6只要2000轮）；比默认版 +0.00012
-2026/8/24,,L2_xgboost_tuned_tierB,0.96403,0.00036,,depth=4 全量；需4282轮
-2026/8/24,submission_20260824_0947_hillclimb.csv,hillclimb,0.96487,,0.96627,预测 0.96623（CV+0.00136），实际 0.96627，误差 4e-5 —— 校准关系二次验证成立
+2026/8/21,"",L1_xgboost_tierA,0.9591,0.0013,"",【早停前】固定600轮基线：原生NaN+xgboost，Tier A 200k
+2026/8/21,"",L2_xgboost_tierA,0.95871,0.00132,"",【早停前】中位数填补
+2026/8/21,"",L3_xgboost_tierA,0.95804,0.00128,"",【早停前】条件均值插补，三条线最差
+2026/8/21,"",L4_xgboost_tierA,0.95618,0.00116,"",【早停前】PMM随机插补，xgboost上最差
+2026/8/21,"",L2_glmnet_tierA,0.91775,0.00151,"",【早停前】中位数填补+elastic net
+2026/8/21,"",L3_glmnet_tierA,0.92841,0.00128,"",【早停前】条件均值插补+elastic net，方向反转
+2026/8/23,"",L1_xgboost_tierA,0.96088,0.00125,"",【加早停】+0.00178 vs 固定600轮，早停选1158轮
+2026/8/23,"",L2_xgboost_tierA,0.96047,0.00126,"",【加早停】Tier A
+2026/8/23,"",L3_xgboost_tierA,0.95951,0.00115,"",【加早停】Tier A
+2026/8/23,"",L4_xgboost_tierA,0.95791,0.00126,"",【加早停】Tier A
+2026/8/23,"",L1_lightgbm_tierA,0.95983,0.00122,"",【加早停】lightgbm复现了xgboost的排序
+2026/8/23,"",L2_lightgbm_tierA,0.95975,0.00125,"",【加早停】Tier A
+2026/8/23,"",L3_lightgbm_tierA,0.95957,0.00118,"",【加早停】Tier A
+2026/8/23,"",L4_lightgbm_tierA,0.95704,0.0011,"",【加早停】Tier A
+2026/8/23,"",L2_ranger_tierA,0.9396,0.00107,"",【加早停】ranger必须插补
+2026/8/23,"",L3_ranger_tierA,0.9398,0.00109,"",【加早停】ranger上L3反超L2，方向与GBDT相反
+2026/8/23,"",L4_ranger_tierA,0.93581,0.00136,"",【加早停】Tier A
+2026/8/23,"",L2_glmnet_tierA,0.9178,0.0015,"",【加早停】Tier A
+2026/8/23,"",L3_glmnet_tierA,0.92825,0.00124,"",【加早停】glmnet上L3反超L2 +0.01045，n=15下p<0.0001
+2026/8/23,"",L4_glmnet_tierA,0.91572,0.00148,"",【加早停】Tier A
+2026/8/23,"",tuned_L1_xgboost,0.96145,"","",调参最优eta=0.05 depth=4，+0.00066；排序不翻转
+2026/8/24,"",L1_xgboost_tierB,0.96454,"","",全量69万重训，比Tier A高+0.00366
+2026/8/24,"",L2_xgboost_tierB,0.96402,"","",全量69万重训
+2026/8/24,"",L1_lightgbm_tierB,0.96368,"","",全量69万重训
+2026/8/24,"",L2_lightgbm_tierB,0.96363,"","",全量69万重训
+2026/8/24,"",L3_lightgbm_tierB,0.9633,"","",全量69万重训
+2026/8/24,"",L3_ranger_tierB,0.94126,"","",全量69万重训，多样性成员
+2026/8/24,"",L3_glmnet_tierB,0.92778,"","",全量69万重训，唯一没从更多数据获益的模型(-0.00047)
+2026/8/24,submission_20260824_0017_hillclimb.csv,ensemble_hillclimb,0.96477,"",0.96613,7成员爬山法集成；最好单模型L1_xgboost 0.96453，集成仅提升+0.00024
+2026/8/24,submission_20260824_0916_hillclimb.csv,hillclimb,0.96477,"","",作废：调参版撞 max_rounds=3000 上限被截断，未提交
+2026/8/24,"",L1_xgboost_tuned_tierB,0.96465,0.00043,"",depth=4 全量；需4405轮（默认depth=6只要2000轮）；比默认版 +0.00012
+2026/8/24,"",L2_xgboost_tuned_tierB,0.96403,0.00036,"",depth=4 全量；需4282轮
+2026/8/24,submission_20260824_0947_hillclimb.csv,hillclimb,0.96487,"",0.96627,预测 0.96623（CV+0.00136），实际 0.96627，误差 4e-5 —— 校准关系二次验证成立
+2026-09-02,submission_20260902_1048_logistic_rank.csv,logistic_rank,0.96805,"","",""
