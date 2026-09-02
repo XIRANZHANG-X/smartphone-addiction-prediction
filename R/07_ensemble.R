@@ -137,6 +137,31 @@ cat("\n计算二层 logistic ... "); flush.console()
 results$logistic <- cv_blend(blend_logistic)
 cat(sprintf("CV AUC %.5f\n", fast_auc(y, results$logistic)))
 
+# ---- 方法一之二：秩空间的二层 logistic ★ 实测最好 ---------------------------
+# 与方法一唯一的差别是**先把每一列换成它自己的秩**，再拟合同一个 logistic。
+#
+# 为什么这有用：AUC 只看秩，而各成员并没有校准到同一个尺度上
+# （glmnet 的输出分布与 GBDT 完全不同）。在概率空间做加权，等于把
+# 各自的校准也一起加权了；换到秩空间就中和掉了这一层。
+#
+# 实测（Tier B，9 个候选，加入编码之前的口径）：
+#   logistic（概率）0.96458   ->   logistic（秩）0.96511   即 +0.00053
+#   而我们此前选用的爬山法是 0.96487，所以这一项也超过了它 +0.00024。
+#
+# 来源：竞赛讨论区第 13 帖 protects-lab 报告了「秩 + 带正则的负权重 stack」。
+# 我们把他那两个成分拆开单独测，结论是**秩变换有效、正则化有害**：
+#   ridge 正则（概率）0.96398、ridge 正则（秩）0.96395，都低于不加正则的版本。
+# 大概是因为我们只有 9 个成员、69 万行，正则化纯属浪费自由度。
+# 完整对照见 R/22_cheap_wins.R 与 docs/讨论区核查.md。
+blend_logistic_rank <- function(X_tr, y_tr, X_va) {
+  R_tr <- apply(X_tr, 2, function(v) rank(v, ties.method = "average") / length(v))
+  R_va <- apply(X_va, 2, function(v) rank(v, ties.method = "average") / length(v))
+  blend_logistic(R_tr, y_tr, R_va)
+}
+cat("计算秩空间 logistic ... "); flush.console()
+results$logistic_rank <- cv_blend(blend_logistic_rank)
+cat(sprintf("CV AUC %.5f\n", fast_auc(y, results$logistic_rank)))
+
 # ---- 方法二：rank 平均 -------------------------------------------------------
 # 无需训练，没有可拟合的参数，因此不存在泄漏，直接在全量上算即可。
 rank_avg <- function(M) rowMeans(apply(M, 2, rank))
@@ -202,6 +227,7 @@ cat("\n生成 test 预测 ... "); flush.console()
 final_test <- switch(
   best_name,
   logistic  = blend_logistic(OOF, y, TEST),
+  logistic_rank = blend_logistic_rank(OOF, y, TEST),
   rank_avg  = rank_avg(TEST),
   hillclimb = blend_hillclimb(OOF, y, TEST)
 )
