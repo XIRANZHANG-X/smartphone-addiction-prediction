@@ -60,6 +60,16 @@ cat(sprintf("Tier A：%s 行，冻结 5 折\n", format(nrow(X_pool), big.mark = 
 #' Georgy Mamarin / Dariush Afshar 反复引用）用的是四项。
 #' R/17_discussion_checks.R 已在 421,427 行上确认四项约束同样 100% 成立，
 #' 且最小残差恰为 0.000（三项版最小 0.100）——说明四项才是生成器真正强制的那条。
+#'
+#' ⚠ **2026-09-03 起这一臂的含义变了。** 本脚本的 base 用的是
+#' derive_features() 的**当前**定义，而四项更正已于 2026-09-01 合并进去，
+#' 所以 base 里的 other_screen 已经就是四项残差 —— 这里再 add_resid4()
+#' 等于**追加一列完全重复的列**。重跑得到 +0.00002、2/5 同号，
+#' 与 placebo 的 +0.00003、2/5 无法区分。
+#'
+#' 这个数字仍然有意义，只是意义换了：它现在测的是**"给模型一列冗余副本
+#' 值多少"**，答案是「和一列随机数一样多，也就是不值什么」。
+#' 「改对定义值多少」那个测量在 R/20_feature_v2.R 里（v1 vs v2 两个显式口径）。
 add_resid4 <- function(dt) {
   dt[, resid4 := daily_screen_time_hours -
                  (social_media_hours + gaming_hours + work_study_hours)]

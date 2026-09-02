@@ -286,12 +286,38 @@ if (FORCE_REBUILD || !file.exists(file.path("output", "features_raw.rds"))) {
 #' @param y_tr      训练部分的标签 —— 只有它能被 target encoder 看到
 #' @param fit_imputer,apply_imputer 一条插补线的两个函数
 #' @param use_derived,use_te 开关，用于消融对照
+#' @param cache_file 可选。插补结果的缓存路径，见下方说明。NULL 表示不缓存。
 #' @return list(tr, va)
 prepare_fold <- function(X_tr, y_tr, X_va, fit_imputer, apply_imputer,
-                         use_derived = TRUE, use_te = TRUE) {
-  imp <- fit_imputer(X_tr)                       # 1. 只看训练部分
-  A <- apply_imputer(imp, data.table::copy(X_tr))
-  B <- apply_imputer(imp, data.table::copy(X_va))
+                         use_derived = TRUE, use_te = TRUE,
+                         cache_file = NULL) {
+  # ---- 1. 插补（可缓存）----------------------------------------------------
+  # 缓存的对象是**插补之后、派生与编码之前**的一对表。派生和编码都很便宜
+  # 且都依赖 y_tr，缓存它们没有收益还会引入口径混淆，所以只缓存这一步。
+  #
+  # 缓存的正确性依据（只对 L4 有意义，其余三条线本来就快）：
+  #   L4 的随机种子由框架在折循环开头的 set.seed(SEED + k) 派生
+  #   （见 05_impute_L4.R 的 fit_imputer_L4），不依赖于用哪个算法建模，
+  #   所以同一折下四个算法拿到的插补结果逐位相同，复用是**等价而非近似**。
+  #   L1/L2/L3 完全不消耗随机数，更不必说。
+  if (!is.null(cache_file) && file.exists(cache_file)) {
+    .cc <- readRDS(cache_file)
+    stopifnot("缓存的训练部分行数对不上" = nrow(.cc$A) == nrow(X_tr),
+              "缓存的验证部分行数对不上" = nrow(.cc$B) == nrow(X_va))
+    A <- data.table::copy(.cc$A)
+    B <- data.table::copy(.cc$B)
+    rm(.cc)
+  } else {
+    imp <- fit_imputer(X_tr)                     # 只看训练部分
+    A <- apply_imputer(imp, data.table::copy(X_tr))
+    B <- apply_imputer(imp, data.table::copy(X_va))
+    if (!is.null(cache_file)) {
+      dir.create(dirname(cache_file), showWarnings = FALSE, recursive = TRUE)
+      # compress = FALSE：这些文件几十到几百 MB，读写速度比体积重要，
+      # 而且它们是可重建的中间产物，跑完就该删。
+      saveRDS(list(A = A, B = B), cache_file, compress = FALSE)
+    }
+  }
 
   if (use_derived) {                             # 2. 插补之后才算派生
     A <- derive_features(A)

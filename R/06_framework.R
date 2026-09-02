@@ -20,6 +20,11 @@
 #                设 FALSE 关闭，用于复现「没有它」的对照。
 #   REPEAT_ID    默认 0。非 0 时用不同的折划分做重复 CV，
 #                供统计稳健性检验使用（见 09_repeated_cv.R）
+#   POOL_FILE    默认空。给出一个存放行下标的 .rds 路径时，用它代替 TIER
+#                选行，用于样本量阶梯实验（见 R/25_size_ladder.R）。
+#                此时产物改存到 output/ladder/，不进主网格目录。
+#   IMPUTE_CACHE 默认 FALSE。设 TRUE 时把每折的插补结果缓存到
+#                output/impute_cache/ 并在后续复用。只对 L4 有实际意义。
 #   QUIET        默认 FALSE
 #
 # -----------------------------------------------------------------------------
@@ -29,6 +34,11 @@
 #
 #   1. 插补器只在训练折上拟合，绝不碰验证折（防泄漏）
 #   2. 派生特征在插补之后才算（否则比值型特征全是 NA）
+#   3. 每折在建模前重设一次随机种子（set.seed(SEED + k)），
+#      使模型拿到的随机流与插补消耗了多少随机数无关。
+#      这条是 2026-09-02 加插补缓存时补上的：L4 的 missRanger 会取随机数，
+#      不重设的话「读缓存」与「现算」两条路径给出的模型就不同。
+#      对 L1/L2/L3 是空操作（它们的插补器不取随机数）。
 #
 # 早停所需的内部验证集由 fit_predict 自己从训练折里切（见 lib_models.R），
 # 外层验证折从头到尾不参与任何模型选择。
@@ -44,6 +54,8 @@ if (!exists("SEED"))        SEED        <- 20260821L
 if (!exists("USE_DERIVED")) USE_DERIVED <- TRUE
 if (!exists("USE_TE"))      USE_TE      <- TRUE
 if (!exists("REPEAT_ID"))   REPEAT_ID   <- 0L
+if (!exists("POOL_FILE"))   POOL_FILE   <- ""
+if (!exists("IMPUTE_CACHE"))IMPUTE_CACHE<- FALSE
 if (!exists("QUIET"))       QUIET       <- FALSE
 
 # 环境变量覆盖，避免为了跑 Tier B 或重复 CV 去改 14 个模型文件：
@@ -56,6 +68,9 @@ if (nzchar(Sys.getenv("USE_DERIVED")))
   USE_DERIVED <- !(Sys.getenv("USE_DERIVED") %in% c("0", "FALSE", "false"))
 if (nzchar(Sys.getenv("USE_TE")))
   USE_TE <- !(Sys.getenv("USE_TE") %in% c("0", "FALSE", "false"))
+if (nzchar(Sys.getenv("POOL_FILE")))    POOL_FILE    <- Sys.getenv("POOL_FILE")
+if (nzchar(Sys.getenv("IMPUTE_CACHE")))
+  IMPUTE_CACHE <- !(Sys.getenv("IMPUTE_CACHE") %in% c("0", "FALSE", "false"))
 
 say <- function(...) if (!QUIET) cat(...)
 
@@ -77,10 +92,17 @@ stopifnot("features_raw 训练行数与 folds 长度不一致" =
             nrow(.train_all) == length(.folds))
 
 # ---- 选行 -------------------------------------------------------------------
-if (TIER == "A") {
-  .row_idx <- readRDS("output/subsample_200k.rds")
+# .pool_tag 是「这次用的是哪一池行」的标识，进缓存文件名，
+# 防止不同规模的池共用同一份插补缓存。
+if (nzchar(POOL_FILE)) {
+  .row_idx  <- readRDS(POOL_FILE)
+  .pool_tag <- sub("\\.rds$", "", basename(POOL_FILE))
+} else if (TIER == "A") {
+  .row_idx  <- readRDS("output/subsample_200k.rds")
+  .pool_tag <- "tierA"
 } else if (TIER == "B") {
-  .row_idx <- seq_len(nrow(.train_all))
+  .row_idx  <- seq_len(nrow(.train_all))
+  .pool_tag <- "tierB"
 } else {
   stop('TIER 只能是 "A" 或 "B"')
 }
@@ -104,6 +126,18 @@ if (REPEAT_ID > 0L) {
 }
 
 .derive <- if (USE_DERIVED) derive_features else function(dt) dt
+
+# ---- 插补缓存的路径 ---------------------------------------------------------
+# 键必须包含所有会改变插补结果的东西：插补线、行池、重复编号、种子、折号。
+# 少一个就会串味 —— 例如 5 万和 40 万两个池若共用一个键，
+# 第二个跑的会读到第一个的表，行数对不上直接被 prepare_fold 的 stopifnot 拦住，
+# 但若两个池行数恰好相同就不会被拦，所以池标识必须进键。
+.cache_path <- function(part) {
+  if (!IMPUTE_CACHE) return(NULL)
+  file.path("output/impute_cache",
+            sprintf("%s_%s_r%d_s%d_%s.rds",
+                    IMPUTE_LINE, .pool_tag, REPEAT_ID, SEED, part))
+}
 
 say(sprintf("模型 %s | Tier %s | %s 行 | 插补 %s | 派生 %s | TE %s%s\n",
             MODEL_NAME, TIER, format(nrow(X_pool), big.mark = ","),
@@ -132,10 +166,17 @@ for (k in sort(unique(f_pool))) {
   # 此前它们各自复制了一份，加 target encoding 时就漏掉了三个。
   .fold <- prepare_fold(X_pool[tr], y_pool[tr], X_pool[va],
                         .fit_imputer, .apply_imputer,
-                        use_derived = USE_DERIVED, use_te = USE_TE)
+                        use_derived = USE_DERIVED, use_te = USE_TE,
+                        cache_file = .cache_path(sprintf("k%d", k)))
   X_tr <- .fold$tr; X_va <- .fold$va
 
   # 4. 训练 + 预测（早停在 fit_predict 内部完成）
+  #
+  # 再 set.seed 一次，让模型拿到的随机流与「插补消耗了多少随机数」无关。
+  # L1/L2/L3 的插补器完全不取随机数，所以这一行对它们是空操作；
+  # L4 会取（missRanger），若不重设，走缓存与不走缓存的模型随机流就会不同，
+  # 复用便不再是逐位等价。加上这一行之后两条路径给出完全相同的结果。
+  set.seed(SEED + k)
   pred <- fit_predict(X_tr, y_pool[tr], X_va)
   bi <- attr(pred, "best_iteration")
   if (!is.null(bi)) best_iter <- c(best_iter, bi)
@@ -165,11 +206,19 @@ dir.create("output/oof",  showWarnings = FALSE, recursive = TRUE)
 dir.create("output/test", showWarnings = FALSE, recursive = TRUE)
 
 .meta <- list(model = MODEL_NAME, tier = TIER, impute = IMPUTE_LINE,
+              pool_tag = .pool_tag, n_pool = nrow(X_pool),
               use_derived = USE_DERIVED, use_te = USE_TE, repeat_id = REPEAT_ID,
               fold_auc = fold_auc, cv_mean = cv_mean, cv_sd = cv_sd,
               oof_auc = oof_auc, best_iter = best_iter, minutes = elapsed)
 
-if (REPEAT_ID > 0L) {
+if (nzchar(POOL_FILE)) {
+  # 样本量阶梯：只要 OOF 和 meta，不出 test 预测（阶梯不用于交付）
+  dir.create("output/ladder", showWarnings = FALSE, recursive = TRUE)
+  saveRDS(oof,   sprintf("output/ladder/oof_%s_%s.rds",  .pool_tag, MODEL_NAME))
+  saveRDS(.meta, sprintf("output/ladder/meta_%s_%s.rds", .pool_tag, MODEL_NAME))
+  say(sprintf("\n已保存 output/ladder/meta_%s_%s.rds\n", .pool_tag, MODEL_NAME))
+
+} else if (REPEAT_ID > 0L) {
   dir.create("output/repeat", showWarnings = FALSE, recursive = TRUE)
   saveRDS(.meta, sprintf("output/repeat/rep%d_%s.rds", REPEAT_ID, MODEL_NAME))
   say(sprintf("\n已保存 output/repeat/rep%d_%s.rds\n", REPEAT_ID, MODEL_NAME))
@@ -185,16 +234,15 @@ if (REPEAT_ID > 0L) {
   saveRDS(.meta, sprintf("output/oof/meta_%s.rds", MODEL_NAME))
 
   say("\n生成 test 预测 ... ")
+  # 与折内走同一个 prepare_fold：训练池当「训练部分」、test 当「验证部分」。
+  # 插补器和编码器都只看训练池；test 没有标签，不存在泄漏。
   set.seed(SEED)
-  imp    <- .fit_imputer(X_pool)
-  X_full <- .derive(.apply_imputer(imp, copy(X_pool)))
-  X_test <- .derive(.apply_imputer(imp, copy(.test_all)))
-  if (USE_TE) {
-    # 全量训练池上拟合，应用到 test。test 没有标签，所以不存在泄漏。
-    .te    <- fit_target_encoder(X_full, y_pool)
-    X_full <- apply_target_encoder(.te, X_full)
-    X_test <- apply_target_encoder(.te, X_test)
-  }
+  .fin <- prepare_fold(X_pool, y_pool, .test_all,
+                       .fit_imputer, .apply_imputer,
+                       use_derived = USE_DERIVED, use_te = USE_TE,
+                       cache_file = .cache_path("test"))
+  X_full <- .fin$tr; X_test <- .fin$va
+  set.seed(SEED)                       # 理由同折循环里那一行
   pred_test <- as.numeric(fit_predict(X_full, y_pool, X_test))
 
   saveRDS(pred_test, sprintf("output/test/test_%s.rds", MODEL_NAME))

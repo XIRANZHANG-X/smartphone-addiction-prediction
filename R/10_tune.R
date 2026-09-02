@@ -157,10 +157,26 @@ for (line in c("L1", "L2", "L3", "L4")) {
   cat(sprintf("  %s ... ", line)); flush.console()
   r <- eval_params(best_par, line = line)
   robust[[line]] <- r$auc
-  cat(sprintf("AUC %.5f\n", r$auc))
+  # 打 7 位而不是 5 位：曾经有一次 L3 与 L4 都显示成 0.95226，
+  # 看上去像是同一个数（或者像个 bug），实际相差 0.0000054。
+  cat(sprintf("AUC %.7f\n", r$auc))
 }
-cat("\n最优参数下的排序：",
-    paste(names(sort(unlist(robust), decreasing = TRUE)), collapse = " > "), "\n")
+
+ord <- sort(unlist(robust), decreasing = TRUE)
+cat("\n最优参数下的排序：", paste(names(ord), collapse = " > "), "\n")
+
+# 相邻两项差得太小就不要当成排序 —— 「多大算显著」见 R/23_resolution.R，
+# 同一算法内近乎孪生的一对，分辨率下限约 1e-4。这里用一个保守的 1e-4 门槛
+# 只作提示：低于它的相邻对，其先后没有意义，不应写进结论。
+TIE_TOL <- 1e-4
+gaps <- diff(-ord)
+ties <- which(gaps < TIE_TOL)
+if (length(ties)) {
+  cat("\n⚠ 以下相邻对的差值低于 ", format(TIE_TOL), "，先后不可分辨，不要当成排序：\n", sep = "")
+  for (i in ties)
+    cat(sprintf("    %s (%.7f) 与 %s (%.7f)：差 %.7f\n",
+                names(ord)[i], ord[i], names(ord)[i + 1L], ord[i + 1L], gaps[i]))
+}
 
 saveRDS(list(algo = ALGO, all = all_res, best_name = best_name,
              best_params = best_par, robustness = robust),

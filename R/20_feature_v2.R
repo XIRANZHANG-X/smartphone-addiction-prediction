@@ -49,17 +49,31 @@ safe_div <- function(num, den) ifelse(is.na(num) | is.na(den) | den <= 0,
 # -----------------------------------------------------------------------------
 # 派生特征的两个口径
 # -----------------------------------------------------------------------------
-# v1 = 现状：other_screen 只减两项、free_frac 分母减两遍 work
-derive_v1 <- derive_features
+# ⚠ 2026-09-03 修：这两个函数曾经写成
+#       derive_v1 <- derive_features            # 「旧口径」
+#       derive_v2 <- function(dt) { derive_features(dt); 再改对两列 }
+#   那在 2026-09-01 是对的 —— 当时 derive_features() 里还是旧定义。
+#   但更正合并进 03_features.R 之后，derive_v1 就跟着变成了新定义，
+#   于是两个对照臂计算的是同一件事：重跑得到差值恰好 0.00000、0/5 同号，
+#   而脚本仍然声称自己在比较新旧口径。
+#
+#   这是与「prepare_fold 被复制在六处」同一类的问题：**一个测量脚本
+#   通过别名依赖共享函数的当前行为，共享函数一改，它测的东西就悄悄变了，
+#   而且不会报错。** 现在两个口径都在本文件内显式写死，
+#   无论 03_features.R 以后怎么改，这个对比都还原同一件事。
 
-# v2 = 按发现 1、8 的更正改对（**替换**，不是追加）
-derive_v2 <- function(dt) {
-  dt <- derive_features(dt)
-  dt[, other_screen := daily_screen_time_hours -
-                       (social_media_hours + gaming_hours + work_study_hours)]
-  dt[, free_frac := safe_div(daily_screen_time_hours, 24 - sleep_hours)]
+# v1 = 旧口径：other_screen 只减两项、free_frac 分母把 work 减了两遍
+derive_v1 <- function(dt) {
+  dt <- derive_features(dt)                       # 先算出全部五列（新口径）
+  dt[, other_screen := daily_screen_time_hours -  # 再覆盖成旧的三项残差
+                       (social_media_hours + gaming_hours)]
+  dt[, free_frac := safe_div(daily_screen_time_hours,
+                             24 - sleep_hours - work_study_hours)]
   dt[]
 }
+
+# v2 = 按发现 1、8 更正后的口径，即 03_features.R 现在的定义
+derive_v2 <- function(dt) derive_features(dt)
 
 add_decimal <- function(dt) {
   for (cc in TIME_COLS) {
