@@ -199,3 +199,79 @@ fig2 <- p2a + p2b + plot_layout(widths = c(1, 1.35))
 ggsave("paper/figures/fig2_lattice_mechanism.png", fig2,
        width = 16, height = 7, dpi = 300)
 cat("已保存 paper/figures/fig2_lattice_mechanism.png\n")
+
+# -----------------------------------------------------------------------------
+# 图 3：样本量阶梯
+# -----------------------------------------------------------------------------
+# (a) 十个候选的 AUC 随样本量怎么走 —— 三条 L3 线是全表唯一下降的
+# (b) 与全量排名的秩相关随样本量上升；选择遗憾恒为 0
+
+lad <- readRDS("output/size_ladder.rds")
+N_BY_RUNG <- c("50k" = 50000, "100k" = 100000, "200k" = 200000,
+               "400k" = 400000, "full" = 691369)
+
+w <- copy(lad$wide)
+long <- melt(w, id.vars = "model", variable.name = "rung", value.name = "auc")
+long[, n := N_BY_RUNG[as.character(rung)]]
+# L3 的三个树模型格是唯一随样本量下降的，单独着色
+long[, family := fifelse(model %in% c("L3_xgboost", "L3_lightgbm", "L3_ranger"),
+                         "L3 + tree model (declines with n)", "All other candidates")]
+
+p3a <- ggplot(long, aes(x = n, y = auc, group = model, color = family)) +
+  geom_line(linewidth = 1.3) +
+  geom_point(size = 2.6) +
+  scale_color_manual(values = c("L3 + tree model (declines with n)" = "#E15759",
+                                "All other candidates" = "#4E79A7"),
+                     name = NULL) +
+  scale_x_continuous(trans = "log10",
+                     breaks = N_BY_RUNG,
+                     labels = c("50k", "100k", "200k", "400k", "691k")) +
+  labs(x = "Training pool size (log scale)", y = "CV AUC",
+       subtitle = "(a) Three cells get worse with more data - all of them L3") +
+  PAPER_THEME +
+  # 图例放在右上角：右下角在此图里正好压在 L3_ranger/L2_glmnet 两条最低
+  # 曲线的末端上，见任务说明的第二条放置风险。
+  theme(legend.position = c(0.98, 0.98), legend.justification = c(1, 1))
+
+s <- copy(lad$summary)
+sl <- melt(s[, .(n, spearman, kendall)], id.vars = "n",
+           variable.name = "metric", value.name = "rho")
+sl[, metric := factor(metric, levels = c("spearman", "kendall"),
+                      labels = c("Spearman rho", "Kendall tau"))]
+
+p3b <- ggplot(sl, aes(x = n, y = rho, group = metric,
+                      color = metric, shape = metric)) +
+  geom_hline(yintercept = 1, linetype = "dashed",
+             color = "grey40", linewidth = 0.9) +
+  geom_line(linewidth = 1.5) +
+  geom_point(size = 5, fill = "white", stroke = 1.5) +
+  scale_color_manual(values = c("Spearman rho" = "#4E79A7",
+                                "Kendall tau"  = "#F28E2B"), name = NULL) +
+  scale_shape_manual(values = c(21, 24), name = NULL) +
+  scale_x_continuous(trans = "log10", breaks = N_BY_RUNG,
+                     labels = c("50k", "100k", "200k", "400k", "691k")) +
+  scale_y_continuous(limits = c(0.75, 1.03), breaks = seq(0.8, 1.0, 0.05)) +
+  # label.size 是旧版 ggplot2 里 GeomLabel 边框宽度的参数名；4.x 把它改成了
+  # linewidth（跟其他 geom 统一），继续写 label.size 会被静默忽略并报警告。
+  #
+  # 位置：两条线单调上升但斜率不同——Spearman 在 50k-100k 已经到 0.903-0.927，
+  # Kendall 还在 0.778-0.822，中间留了约 0.10 个单位的空隙，且这一段离右侧
+  # 图例（贴在 x 接近 691k 处）足够远，是全图唯一能放下整块标注还不压线的地方。
+  # 用左对齐（hjust = 0）而不是居中，是因为对数轴 5% 扩边后面板左边界约在
+  # x = 43800：居中锚点选 x = 65000 时框的左半会探出这条边界，"Selection"/
+  # "top-1" 两个词被面板裁掉；改成左对齐、锚点紧贴数据起点 x = 50000，整块
+  # 标注就都留在面板内。
+  annotate("label", x = 50000, y = 0.855, hjust = 0,
+           label = "Selection regret = 0.00000 at every size\ntop-1, top-3, top-5 sets all match",
+           size = 5.2, fontface = "bold", family = FONT,
+           linewidth = 0.8, fill = "white") +
+  labs(x = "Training pool size (log scale)",
+       y = "Rank correlation with the full-data ranking",
+       subtitle = "(b) Ranking converges; the selection is already correct at 50k") +
+  PAPER_THEME +
+  theme(legend.position = c(0.98, 0.30), legend.justification = c(1, 0))
+
+fig3 <- p3a + p3b
+ggsave("paper/figures/fig3_size_ladder.png", fig3,
+       width = 17, height = 7, dpi = 300)
+cat("已保存 paper/figures/fig3_size_ladder.png\n")
