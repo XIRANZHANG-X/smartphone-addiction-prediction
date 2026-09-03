@@ -191,7 +191,7 @@ The budget-remainder feature is the residual of §2.3's four-term hard constrain
 
 Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric columns' values with a smoothed estimate of the positive rate among training-fold rows sharing that exact value, fit within-fold per §3.2's discipline. Table 6 gives the gain from switching it on for each model family — the numbers behind Figure 1.
 
-**Table 6.** AUC gain from exact-value target encoding, by model family.
+**Table 6.** AUC gain from exact-value target encoding, by model family (Tier A, 200,000-row pool).
 
 | Family | TE off | TE on | Gain | Cohen's d | Sign agreement |
 |---|---|---|---|---|---|
@@ -204,7 +204,7 @@ Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric
 
 **Figure 1.** glmnet's gain over xgboost's, 0.03352 / 0.00424 ≈ 7.9×, is the same encoding step worth roughly eight times more to a model with no other way to represent an exact value.
 
-Gradient-boosted trees gain a comparatively modest ~0.004–0.005: an exact value's identity, like §6's ratio features, is something this family can approximate given enough splits even without being handed it directly. ranger gains roughly 5× that, because its individual trees are shallower and weaker, so the same help matters more. glmnet gains roughly 8× that, because it has no mechanism at all for representing "this specific value" short of being handed one parameter per value — which is exactly what the encoding computes and hands it, compressed into a single learned statistic.
+Gradient-boosted trees gain a comparatively modest ~0.004–0.005: an exact value's identity, like §6's ratio features, is something this family can approximate given enough splits even without being handed it directly. ranger gains roughly 5× that, because its individual trees are shallower and weaker, so the same help matters more. The same shift is larger still on the full grid, where §4's Table 3 reports ranger rising from 0.93960 to 0.96324. glmnet gains roughly 8× that, because it has no mechanism at all for representing "this specific value" short of being handed one parameter per value — which is exactly what the encoding computes and hands it, compressed into a single learned statistic.
 
 ### One-hot control
 
