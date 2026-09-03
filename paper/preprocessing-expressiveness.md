@@ -127,3 +127,98 @@ There is accordingly no single answer to how big a difference needs to be to cou
 Of the four model families used in this paper, three — xgboost (Chen & Guestrin, 2016), ranger (Wright & Ziegler, 2017), which implements the random forest algorithm (Breiman, 2001), and glmnet (Friedman, Hastie & Tibshirani, 2010) — are bit-reproducible: rerunning identical code on the identical frozen folds returns identical output to the last digit. lightgbm (Ke et al., 2017) is not. Its configuration sets `num_threads = detectCores()` without also setting `deterministic = TRUE`, and its multithreaded histogram construction does not guarantee a fixed floating-point summation order across runs, so results can vary in the last few digits depending on thread scheduling.
 
 We measured this directly: three runs of the same lightgbm configuration returned 0.96039, 0.96043, and 0.96039 (the middle run competed for CPU with two other concurrent R processes), a maximum deviation of 4×10⁻⁵. This is below every resolution floor actually used in this paper — the smallest of which, the near-twin pair above, is 0.000098. No conclusion in this paper rests on a difference smaller than that. Where an individual lightgbm number is reported without averaging over repeated runs, it should be read as accurate to about ±4×10⁻⁵, not as an exact value in the way the other three families' numbers are.
+
+---
+
+## 4. The 4×4 Grid
+
+Table 3 reports the full missing-value-treatment × model-family grid on the complete 691,369-row, 25-feature training set. ranger and glmnet cannot run L1 natively — neither can split on a missing value without first filling it — so the grid has 14 cells, not 16.
+
+**Table 3.** Full-data grid: AUC by imputation line and model family.
+
+| | xgboost | lightgbm | ranger | glmnet |
+|---|---|---|---|---|
+| L1 | 0.96784 | 0.96746 | — (cannot handle missingness) | — (cannot handle missingness) |
+| L2 | 0.96755 | 0.96726 | 0.96324 | 0.94898 |
+| L3 | 0.94770 | 0.94081 | 0.93903 | **0.95490** |
+| L4 | 0.95443 | 0.95410 | 0.95076 | 0.94559 |
+
+Four conclusions follow. First, across the three tree-based families the ranking is uniformly **L1 > L2 > L4 > L3**: committing to a specific imputed value hurts, and hurts more the more precisely it commits — L1 commits to nothing, L2 to a constant, L3 to a conditional mean, L4 to a real but not-the-actual value, drawn by predictive mean matching (PMM; Little, 1988) among the 5 real donor rows nearest the regression prediction. **glmnet is the sole exception**, ranking L3 > L2 > L4 instead: a linear model cannot natively represent "missing" the way a tree can, so L3's preserved conditional-mean structure helps it, while L4's random real-value draws are just noise to it. This is the paper's first hint of its central thesis; §5 develops it in full.
+
+Second, the gap between algorithm families (~0.03 AUC) dwarfs the gap between imputation strategies within a family (0.001–0.01 AUC). Getting the model family right matters more than any amount of imputation research.
+
+Third, L3's three cells have a per-fold standard deviation 4–7× every other cell in the grid (0.0021–0.0034, versus ~0.0005 elsewhere) — a warning sign that these results are unusually sensitive to which fold's data was drawn, foreshadowing a mechanism §8 explains.
+
+Fourth, ranger jumps from 0.93960 to 0.96324 on the full grid once exact-value encoding is applied — a single preprocessing change that, for this algorithm specifically, nearly closes the gap to the boosted-tree families. §7 gives the mechanism.
+
+---
+
+## 5. Instance 1: Imputation
+
+§4's grid is measured on the single frozen 5-fold split defined in §3.1. For comparisons close enough to warrant a sharper test, `R/09_repeated_cv.R` draws three additional independent 5-fold partitions, used **only to raise the paired sample size for this statistical test — never to alter the main results table**, which remains the one frozen split used everywhere else in this paper (the same discipline §3.1 already argues for). This raises the paired sample size from n = 5 to n = 15.
+
+**Table 4.** Paired imputation comparisons at n = 15.
+
+| Comparison | Mean diff | Cohen's d | Sign agreement |
+|---|---|---|---|
+| L1 vs. L2 (xgboost) | +0.00039 | 3.42 | 15/15 |
+| L2 vs. L3 (xgboost) | +0.01273 | 7.74 | 15/15 |
+| L3 vs. L2 (glmnet, reversed direction) | +0.00617 | 21.46 | 15/15 |
+
+The first row used to be the shakiest comparison in the project: at n = 5 it was 4/5 folds agreeing, p = 0.023. At n = 15 it is 15/15 with Cohen's d 3.42 — small, but real. The third row is this section's payload: **the same pair of imputation lines, L2 and L3, reverses sign between model families**, and both directions now clear 15/15 sign agreement with very large effect sizes. On the tree-based families L2 beats L3; on glmnet, L3 beats L2. This is the thesis's first fully worked instance: gradient-boosted trees can represent "missing" on their own, so a treatment that merely preserves a conditional mean without adding anything a tree could not already infer (L3) is worse than one that does not overcommit (L2); glmnet cannot represent "missing" at all, so L3's preserved structure is valuable to it specifically.
+
+---
+
+## 6. Instance 2: Derived Features
+
+This is the weakest of the paper's three instances, and we say so plainly: unlike Instances 1 and 3, it shows no sign reversal across model families. The comparison below is xgboost-only — no equivalent glmnet measurement exists in the source data for this specific test, so no cross-family claim is made here.
+
+On top of exact-value encoding (§7) already being present, three candidate features were priced individually on the 200,000-row Tier A pool, xgboost (`R/18_new_features.R`, `R/20_feature_v2.R`):
+
+**Table 5.** Candidates added on top of encoding, Tier A, xgboost.
+
+| Candidate | Effect | Cohen's d | Sign agreement | Verdict |
+|---|---|---|---|---|
+| Four-term budget-remainder feature (`daily_screen_time_hours − social_media_hours − gaming_hours − work_study_hours`) | +0.00064 | 3.06 | 5/5 | Complementary — retained |
+| Raising `max_bin` to 2048 | +0.00003 | 0.19 | 2/5 | Fully absorbed by encoding |
+| Extracting 12 decimal-digit features | +0.00005 | 0.22 | 3/5 | Fully absorbed by encoding |
+
+The budget-remainder feature is the residual of §2.3's four-term hard constraint. It is the only one of this project's five hand-built derived features — four ratio-type, this one a subtraction — that survives on top of encoding, and the same mechanism that keeps it explains why the other two candidates are absorbed: what matters is how many terms the feature's shape needs. A decision tree does only axis-aligned splits, one feature and one threshold at a time; a ratio between two columns is a line through the origin, which enough staircase splits can approximate, so whatever a ratio expresses, a tree with enough splits — or a tree handed exact-value encoding — can already express too. The four-term constraint's boundary is a hyperplane in four variables that no depth of axis-aligned splitting approximates, so building it by hand remains worth 5/5 folds even with encoding already in place.
+
+---
+
+## 7. Instance 3: Exact-Value Encoding
+
+Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric columns' values with a smoothed estimate of the positive rate among training-fold rows sharing that exact value, fit within-fold per §3.2's discipline. Table 6 gives the gain from switching it on for each model family — the numbers behind Figure 1.
+
+**Table 6.** AUC gain from exact-value target encoding, by model family.
+
+| Family | TE off | TE on | Gain | Cohen's d | Sign agreement |
+|---|---|---|---|---|---|
+| xgboost | 0.96138 | 0.96562 | +0.00424 | 7.97 | 5/5 |
+| lightgbm | 0.96039 | 0.96514 | +0.00475 | 11.22 | 5/5 |
+| ranger | 0.94058 | 0.96096 | +0.02039 | 64.89 | 5/5 |
+| glmnet | 0.91452 | 0.94805 | +0.03352 | 42.75 | 5/5 |
+
+![Figure 1. AUC gain from exact-value target encoding, by model family. Bars show the mean over 5 frozen folds with 95% CI; points show individual folds.](figures/fig1_te_by_family.png)
+
+**Figure 1.** glmnet's gain over xgboost's, 0.03352 / 0.00424 ≈ 7.9×, is the same encoding step worth roughly eight times more to a model with no other way to represent an exact value.
+
+Gradient-boosted trees gain a comparatively modest ~0.004–0.005: an exact value's identity, like §6's ratio features, is something this family can approximate given enough splits even without being handed it directly. ranger gains roughly 5× that, because its individual trees are shallower and weaker, so the same help matters more. glmnet gains roughly 8× that, because it has no mechanism at all for representing "this specific value" short of being handed one parameter per value — which is exactly what the encoding computes and hands it, compressed into a single learned statistic.
+
+### One-hot control
+
+An earlier draft of this paper claimed linear models "cannot represent exact-value lookup at all" — too strong. A control: one-hot-encode the 8 exact-value columns (one binary column per distinct value) and fit ridge logistic regression in place of glmnet (`R/24_onehot_lr.R`), on the same frozen 5-fold split and the same Tier A / full pools used throughout:
+
+**Table 7.** One-hot exact-value encoding + ridge logistic regression.
+
+| Pool | Training rows (per fold) | AUC |
+|---|---|---|
+| Tier A | 160,000 | 0.95583 |
+| Full | 553,000 | **0.95929** |
+
+(Each count is that fold's training partition — four-fifths of the 200,000-row Tier A and 691,369-row full pools used elsewhere.)
+
+A linear model *can*, then, do exact-value lookup; it simply needs one parameter per distinct value rather than the compression into a single learned statistic that target encoding provides. The thesis, refined here: what a model cannot do without help is exact-value lookup **without paying for it in parameters**, not exact-value lookup as such.
+
+A discussion-board post reported a higher AUC, 0.96005, for what looks like the same one-hot approach — but under a different protocol: 10-fold cross-validation with interaction terms, versus this paper's 5-fold without. The pair above and that external figure are **not a like-for-like comparison**; we do not present them as equivalent or attempt to adjust for the gap. §10 lists the mismatch among this paper's disclosed validity threats; the discussion board is credited in the Acknowledgements.
