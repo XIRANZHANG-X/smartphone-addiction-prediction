@@ -117,6 +117,12 @@ target encoder 都是 `fit_* / apply_*` 分离的形状，由 `R/06_framework.R`
 - **`sys.source(envir=)` 隔离不了模型文件**（`source()` 在 globalenv 求值）。
   每格用子进程跑。
 - **写 R/Python 脚本用 Write 工具，不要用 bash heredoc**，长脚本和转义容易损坏。
+- **给 PowerShell 5.1 写的 `.ps1` 必须全 ASCII。** PS 5.1 按系统 ANSI 码页读脚本文件，
+  而 Write 工具写的是无 BOM 的 UTF-8——中文注释会被打乱成乱码并导致**解析失败**，
+  报错信息还指向莫名其妙的行。注释也用英文。
+- **`Compress-Archive` 与 .NET Framework 的 `ZipFile.CreateFromDirectory` 都写反斜杠
+  做 zip 路径分隔符**，违反 ZIP 规范：Windows 能解，Linux/macOS 的 `unzip` 会解出
+  文件名里带反斜杠的平铺文件。要跨平台就手工建条目、把 `\` 换成 `/`。
 - 生成图表时**小差异不要用零基线柱状图**：本项目算法间差 0.03、
   插补策略间只差 0.001~0.01，从 0 起画后者会被压平。
 
@@ -153,5 +159,16 @@ target encoder 都是 `fit_* / apply_*` 分离的形状，由 `R/06_framework.R`
    集成权重迁移代价上界 0.00003；但排名错误全部集中在 L3 那几格；
 3. 消融结论依赖当时的特征集——加编码后「删掉通知数」的损失缩小 37 倍，
    而「删掉派生特征」从 +0.00012 反转为 −0.00111。
+
+**下一步是写论文。** 设计与计划都已定稿并提交：
+
+- 设计：[docs/superpowers/specs/2026-09-03-paper-preprocessing-expressiveness-design.md](docs/superpowers/specs/2026-09-03-paper-preprocessing-expressiveness-design.md)
+- 计划：[docs/superpowers/plans/2026-09-03-paper-preprocessing-expressiveness.md](docs/superpowers/plans/2026-09-03-paper-preprocessing-expressiveness.md)（9 个任务）
+
+英文课程论文，中心论断是「一项预处理的价值 = 该变换有多难被下游模型自己构造出来」。
+计划按「接手的人零上下文」的标准写，可以在新会话里直接执行。
+
+**环境事实：`gh` 未安装**，所以 GitHub Release 只能在网页上手动传。
+实验产物走 Release 分发，不进 git（`output/` 有 819 MB，git 会永久保存每个版本）。
 
 **待办清单**见 [docs/进度.md](docs/进度.md)。
