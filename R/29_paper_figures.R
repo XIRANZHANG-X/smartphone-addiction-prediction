@@ -99,3 +99,78 @@ fig1 <- ggplot(summ, aes(x = algo, y = m, fill = algo)) +
 ggsave("paper/figures/fig1_te_by_family.png", fig1,
        width = 13, height = 7, dpi = 300)
 cat("已保存 paper/figures/fig1_te_by_family.png\n")
+
+# -----------------------------------------------------------------------------
+# 图 2：机制与后果
+# -----------------------------------------------------------------------------
+# (a) 插补填出的值有多少能在编码表里查到 —— L3 几乎全部查不到
+# (b) L3 与 L4 的先后，在三个条件下怎么变 —— 每次只变一个量
+#
+# ⚠ (b) 必须画三个条件而不是两个。只画「Tier A 无编码」对「全量有编码」
+#    是混淆比较：那两个条件同时变了编码和样本量。
+
+hit <- readRDS("output/lattice_hit.rds")
+hs  <- hit[, .(hit_rate = sum(n_hit) / sum(n_imputed)), by = line]
+hs[, line := factor(line, levels = c("L2", "L3", "L4"))]
+hs[, lab := c("L2\nmedian", "L3\nregression", "L4\nPMM")[as.integer(line)]]
+
+LINE_COLORS <- c("L2" = "#76B7B2", "L3" = "#E15759", "L4" = "#4E79A7")
+
+# 标签精度用 %.4f%%：%.2f%% 会把 L2 的 100.000000% 和 L4 的 99.999033% 一起
+# 印成 "100.00%"，掩盖 L4 在 206846 条里有 2 条没命中格点这件事；四位小数
+# 能把 L2/L3/L4 都区分开，且与 docs/实验报告.md §10.1 的数字对得上。
+p2a <- ggplot(hs, aes(x = line, y = 100 * hit_rate, fill = line)) +
+  geom_col(width = 0.6, color = "black", linewidth = 0.8, alpha = 0.85) +
+  geom_text(aes(label = sprintf("%.4f%%", 100 * hit_rate)),
+            vjust = -0.6, size = 6, fontface = "bold", family = FONT) +
+  scale_fill_manual(values = LINE_COLORS, guide = "none") +
+  scale_x_discrete(labels = hs$lab) +
+  scale_y_continuous(limits = c(0, 112), breaks = seq(0, 100, 25),
+                     expand = expansion(mult = c(0, 0.02))) +
+  labs(x = NULL, y = "Imputed values found in the encoding table (%)",
+       subtitle = "(a) Regression imputation leaves the generator's 0.01 lattice") +
+  PAPER_THEME
+
+# (b) 三条件比较
+grab <- function(p) if (file.exists(p)) readRDS(p)$cv_mean else NA_real_
+cond <- data.table(
+  condition = factor(
+    c("200k\nno encoding", "200k\nencoding", "Full 691k\nencoding"),
+    levels = c("200k\nno encoding", "200k\nencoding", "Full 691k\nencoding")),
+  L3 = c(grab("output/archive_pre_te/tierA_grid/meta_grid_L3_xgboost.rds"),
+         grab("output/ladder/meta_pool_200k_L3_xgboost.rds"),
+         grab("output/oof/meta_L3_xgboost.rds")),
+  L4 = c(grab("output/archive_pre_te/tierA_grid/meta_grid_L4_xgboost.rds"),
+         grab("output/ladder/meta_pool_200k_L4_xgboost.rds"),
+         grab("output/oof/meta_L4_xgboost.rds")))
+stopifnot("图 2b 缺数据" = !anyNA(cond$L3) && !anyNA(cond$L4))
+
+cl <- melt(cond, id.vars = "condition", variable.name = "line", value.name = "auc")
+
+# 在「200k, encoding」这一条件下 L3/L4 的 cv_mean 只差 0.00076，若两条线的
+# 数值标签都固定摆在各自点的正上方，会在这一格叠成一团读不出来。改成看
+# 哪条线在该条件下更高就把标签摆在上面、更低的摆在下面——这样每个条件里
+# 两个标签总是分处点的两侧，顺带也把第三个条件里 L3（此时是最低点）的
+# 标签从「贴着来向的连线」挪到了点下方，避开了线段。
+cl[, is_top := auc == max(auc), by = condition]
+
+p2b <- ggplot(cl, aes(x = condition, y = auc, group = line, color = line)) +
+  geom_line(linewidth = 1.6) +
+  geom_point(size = 5, shape = 21, fill = "white", stroke = 1.6) +
+  geom_text(aes(label = sprintf("%.5f", auc), vjust = ifelse(is_top, -1.2, 1.8)),
+            size = 5, fontface = "bold", family = FONT,
+            show.legend = FALSE) +
+  scale_color_manual(values = c("L3" = "#E15759", "L4" = "#4E79A7"),
+                     name = NULL,
+                     labels = c("L3 (regression)", "L4 (PMM)")) +
+  scale_y_continuous(expand = expansion(mult = c(0.10, 0.14))) +
+  labs(x = NULL, y = "CV AUC (xgboost)",
+       subtitle = paste0("(b) Encoding halves L3's lead at matched n; ",
+                         "the reversal needs full data as well")) +
+  PAPER_THEME +
+  theme(legend.position = c(0.02, 0.06), legend.justification = c(0, 0))
+
+fig2 <- p2a + p2b + plot_layout(widths = c(1, 1.35))
+ggsave("paper/figures/fig2_lattice_mechanism.png", fig2,
+       width = 16, height = 7, dpi = 300)
+cat("已保存 paper/figures/fig2_lattice_mechanism.png\n")
