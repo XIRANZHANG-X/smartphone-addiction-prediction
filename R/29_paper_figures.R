@@ -19,9 +19,15 @@ suppressMessages({
 
 dir.create("paper/figures", showWarnings = FALSE, recursive = TRUE)
 
-# Windows 下注册 Times New Roman；非 Windows 或缺字体时回落到默认无衬线
+# ggsave() 在这里走的是 ragg / systemfonts 渲染后端，它不认 windowsFonts() 注册的
+# 别名，而是自己按字体族名向系统字体表查询。所以直接把 FONT 设成字体的真实族名
+# "Times New Roman"，而不是转一道 windowsFonts() 别名。
+# 是否真的存在这个字体，用 systemfonts::system_fonts()（ragg/systemfonts 自己解析
+# 字体时依据的同一张表）实际查一次族名——查得到才诚实地判定"有"；
+# systemfonts::match_fonts() 在查不到时会静默换成别的字体而不报错，不能拿来判断有没有，
+# 所以不用它来做存在性检查。查不到就老实回落到默认无衬线（空字符串），不假装成功。
 FONT <- tryCatch({
-  windowsFonts(Times = windowsFont("Times New Roman")); "Times"
+  if ("Times New Roman" %in% systemfonts::system_fonts()$family) "Times New Roman" else ""
 }, error = function(e) "")
 
 #' 论文统一主题
