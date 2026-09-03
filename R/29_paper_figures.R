@@ -229,9 +229,12 @@ p3a <- ggplot(long, aes(x = n, y = auc, group = model, color = family)) +
   labs(x = "Training pool size (log scale)", y = "CV AUC",
        subtitle = "(a) Three cells get worse with more data - all of them L3") +
   PAPER_THEME +
-  # 图例放在右上角：右下角在此图里正好压在 L3_ranger/L2_glmnet 两条最低
-  # 曲线的末端上，见任务说明的第二条放置风险。
-  theme(legend.position = c(0.98, 0.98), legend.justification = c(1, 1))
+  # 图例移出绘图区域(底部),而不是面板内部四个角落中的任何一个。十条线在两端几乎撑满了整个纵轴范围:
+  # 右端(691k)从 0.939 一直到 0.968,其中 L1/L2 的 xgboost/lightgbm 四条线挤在 0.9673-0.9678
+  # 这一条窄带里,左端(50k)也有 0.942-0.966 的跨度。四个内角(包括原来的右上角)
+  # 没有一个是干净的,theme_bw() 默认不透明的图例背景换成半透明也遮不住
+  # “四条线叠在一起”这种情况——那是实打实的一叠线,不是偶尔路过的空隙。
+  theme(legend.position = "bottom")
 
 s <- copy(lad$summary)
 sl <- melt(s[, .(n, spearman, kendall)], id.vars = "n",
