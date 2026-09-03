@@ -86,7 +86,7 @@ source("R/04_folds.R")
 `output/` 整个在 `.gitignore` 里（只有 `folds.rds`、`subsample_200k.rds`、
 `results.md` 三个例外），所以 clone 之后是空的。跑一遍全部实验要七八个小时。
 
-**[Releases](../../releases) → 下最新的 `artifacts-YYYY-MM-DD.zip`，解压后把 `output/` 覆盖到项目根目录。**
+**[Releases](https://github.com/XIRANZHANG-X/smartphone-addiction-prediction/releases) → 下最新的 `artifacts-YYYY-MM-DD.zip`，解压后把 `output/` 覆盖到项目根目录。**
 
 里面有全量 4×4 网格（14 格）、Tier A 网格、样本量阶梯四级、重复 CV
 与全部专项结果。**不含**竞赛数据本身（`raw_train.rds` / `raw_test.rds` /
