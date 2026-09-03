@@ -81,6 +81,20 @@ source("R/03_features.R")
 source("R/04_folds.R")
 ```
 
+### 实验产物：从 Releases 拿，不要重跑
+
+`output/` 整个在 `.gitignore` 里（只有 `folds.rds`、`subsample_200k.rds`、
+`results.md` 三个例外），所以 clone 之后是空的。跑一遍全部实验要七八个小时。
+
+**[Releases](../../releases) → 下最新的 `artifacts-YYYY-MM-DD.zip`，解压后把 `output/` 覆盖到项目根目录。**
+
+里面有全量 4×4 网格（14 格）、Tier A 网格、样本量阶梯四级、重复 CV
+与全部专项结果。**不含**竞赛数据本身（`raw_train.rds` / `raw_test.rds` /
+`features_raw.rds`）——那三个由上面第 3、4 步自己生成，几秒钟。
+
+> 为什么不直接提交进 git：`output/` 有 819 MB，而 git 会永久保存每一个版本，
+> 每次重跑网格都会再增加约 75–100 MB 且删不掉。Release 附件不进 git 历史。
+
 ---
 
 ## 代码架构

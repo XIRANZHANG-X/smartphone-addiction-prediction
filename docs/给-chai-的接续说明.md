@@ -134,14 +134,13 @@ oof_files <- list.files("output/oof", pattern = "^oof_grid_.*\\.rds$", full.name
 **（a）便宜：加一句口径声明。** 在脚本头部写明"本分析基于编码之前的 17 特征配置"。
 结论作为历史记录仍然有效，不用重跑。
 
-**（b）更好：换成现役口径。** 跑
-
-```bash
-"D:/R/R-4.6.1/bin/Rscript.exe" R/25_size_ladder.R 200k
-```
-
-约 25 分钟，产出 `output/ladder/oof_pool_200k_*.rds`——
+**（b）更好：换成现役口径。** 不用自己跑——
+**从 GitHub Releases 下 `artifacts-2026-09-03.zip`（见 §2.6）解压即可**，
+里面有 `output/ladder/oof_pool_200k_*.rds`：
 **同样的 200,000 行、同样的折划分，但是 25 特征口径**，而且有 14 格（含 L4）。
+
+（想自己跑也可以：`Rscript R/25_size_ladder.R 200k`，约 25 分钟。）
+
 然后把你的 pattern 改成：
 
 ```r
@@ -199,9 +198,33 @@ git mv R/21_foundational_eda.R         R/36_foundational_eda.R
 - `R/06_framework.R` 多了两个环境变量 `POOL_FILE`、`IMPUTE_CACHE`，
   并且**在建模前会重设一次随机种子**。这对 L1/L2/L3 是空操作，但会改变 L4 的结果。
 
-另外：**`output/` 整个在 `.gitignore` 里**（只有 `folds.rds`、`subsample_200k.rds`、
-`results.md` 三个例外）。所以你从 git 拿不到任何实验产物，你机器上那份是你自己跑出来的。
-`folds.rds` 和 `subsample_200k.rds` 是冻结契约，从头到尾没动过，全组一致。
+### 2.6 实验产物改用 GitHub Releases 拿，不再手动发压缩包
+
+**`output/` 整个在 `.gitignore` 里**（只有 `folds.rds`、`subsample_200k.rds`、
+`results.md` 三个例外），所以从 git clone 拿不到任何实验产物。
+以前是手动发压缩包，现在改成 **GitHub Releases**——
+不进 git 历史、仓库体积不受影响、有固定链接、以后重跑了再发一版也不会膨胀。
+
+**仓库 → Releases → `artifacts-2026-09-03` → 下 `artifacts-2026-09-03.zip`（128 MB）。**
+解压后把 `output/` 覆盖到项目根目录。
+
+里面有：14 格全量 OOF（现役 25 特征口径）、14 格 Tier A OOF（编码前 17 特征，
+你 `20_universally_hard_rows.R` 现在用的就是这套）、样本量阶梯四级 × 10 格
+外加 20 万池的 L4 四格、重复 CV、以及全部专项结果 rds。
+**省掉约 7 小时算力。**
+
+⚠ **里面没有 `raw_train.rds` / `raw_test.rds` / `features_raw.rds`。**
+这三个是 Kaggle 竞赛数据本身（换了个序列化格式），仓库是公开的，
+而 `.gitignore` 里写明「竞赛数据不宜公开再分发」。你自己两步生成，几秒钟：
+
+```r
+# 1. 从 Kaggle 竞赛页下载 train.csv / test.csv / sample_submission.csv 放进 data/raw/
+# 2. 在项目根目录跑
+source("R/01_load.R")      # -> output/raw_train.rds、raw_test.rds
+source("R/03_features.R")  # -> output/features_raw.rds
+```
+
+`folds.rds` 和 `subsample_200k.rds` 是冻结契约，在 git 里，从头到尾没动过，全组一致。
 
 ---
 
