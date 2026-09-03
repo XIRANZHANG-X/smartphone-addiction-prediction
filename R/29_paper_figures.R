@@ -154,13 +154,38 @@ cl <- melt(cond, id.vars = "condition", variable.name = "line", value.name = "au
 # 标签从「贴着来向的连线」挪到了点下方，避开了线段。
 cl[, is_top := auc == max(auc), by = condition]
 
+# is_top 只解决"同一条件下两条线的标签互相叠"这一种碰撞（在中间条件最要紧，
+# 那里 L3/L4 只差 0.00076）。它没管另一种碰撞：某个点自己的线段，会不会正好
+# 伸进标签摆放的那一侧——这只可能发生在两端的条件，因为端点的点只有一段唯一
+# 相邻的线段，其方向完全由数据决定；中间条件左右都有相邻段，水平方向无处可
+# 避，不处理。做法：按 condition 排序后用 data.table::shift() 取每条线在端点
+# 唯一相邻点的 auc，判断"这段线贴着点的上方还是下方"——最左条件看的是线离开
+# 该点去下一条件（比该点高就贴上方），最右条件看的是线从上一条件进入该点
+# （上一条件比该点高，说明线是从上方压下来的，也贴上方）：两端点的"进/出"
+# 方向相反，所以这里分别用 next_auc 和 prev_auc 直接比较，不共用一个正负号。
+# 当线贴着的那一侧正好是 is_top 选中的 vjust 那一侧，就用水平方向把标签推开
+# （最左条件推左、最右条件推右，即推向"没有相邻点、线段到不了"的那一边），
+# 而不是翻转 vjust——翻转会重新把这条线的标签和另一条线在同一条件下的标签
+# 叠到一起。
+setorder(cl, line, condition)
+cl[, next_auc := shift(auc, 1L, type = "lead"), by = line]
+cl[, prev_auc := shift(auc, 1L, type = "lag"), by = line]
+n_cond <- nlevels(cl$condition)
+x_idx  <- as.integer(cl$condition)
+cl[, seg_occupies_top := fifelse(x_idx == 1L, next_auc > auc,
+                           fifelse(x_idx == n_cond, prev_auc > auc, NA))]
+cl[, label_conflict := !is.na(seg_occupies_top) & (is_top == seg_occupies_top)]
+cl[, label_nudge_x := fifelse(!label_conflict, 0,
+                        fifelse(x_idx == 1L, -0.16, 0.16))]
+
 p2b <- ggplot(cl, aes(x = condition, y = auc, group = line, color = line)) +
   geom_line(linewidth = 1.6) +
   geom_point(size = 5, shape = 21, fill = "white", stroke = 1.6) +
   geom_text(aes(label = sprintf("%.5f", auc), vjust = ifelse(is_top, -1.2, 1.8)),
+            position = position_nudge(x = cl$label_nudge_x),
             size = 5, fontface = "bold", family = FONT,
             show.legend = FALSE) +
-  scale_color_manual(values = c("L3" = "#E15759", "L4" = "#4E79A7"),
+  scale_color_manual(values = LINE_COLORS[c("L3", "L4")],
                      name = NULL,
                      labels = c("L3 (regression)", "L4 (PMM)")) +
   scale_y_continuous(expand = expansion(mult = c(0.10, 0.14))) +
