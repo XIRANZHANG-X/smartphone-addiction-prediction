@@ -103,6 +103,13 @@ target encoder 都是 `fit_* / apply_*` 分离的形状，由 `R/06_framework.R`
   默认跳过已有文件，改了特征口径之后重跑，15 个格子全部跳过、
   报的是三周前编码前的数字。换口径后重跑一律带 `FORCE=1`，并先备份旧产物。
 
+- **★ lightgbm 不可逐位复现。** `lib_models.R` 用 `num_threads = detectCores()`
+  且未设 `deterministic = TRUE`，多线程直方图的浮点求和顺序随线程调度变。
+  同一配置三次实测 0.96039 / 0.96043 / 0.96039，**最大偏离 4e-5**——
+  低于我们做的每一个配对的分辨率下限（最小 9.8e-5），所以不影响任何结论，
+  但报 lightgbm 数字时要说明是单次运行。xgboost/ranger/glmnet 都是可复现的。
+  彻底修法是设 `deterministic = TRUE` 并固定线程数，代价是全部 lightgbm 结果重跑。
+
 - **整数溢出**：`200000L * 98000L` 和 `n1 * n0 ≈ 9.85e10` 都会变 NA。
   行数相乘前一律 `as.numeric()`。
 - **`system2(env=)` 在 Windows 上坏掉**（R 会前置 Unix `env` 命令）。
