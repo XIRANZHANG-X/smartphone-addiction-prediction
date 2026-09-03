@@ -59,7 +59,7 @@
 | 5 | Instance 1: Imputation。GBDT 上 L2>L3、线性模型上 L3>L2 | `R/09_repeated_cv.R`（n=15） |
 | 6 | Instance 2: Derived Features。三项 vs 四项 | `R/20_feature_v2.R` |
 | 7 | Instance 3: Exact-Value Encoding。8 倍差；one-hot 对照 | `R/21_te_by_family.R`、`R/24_onehot_lr.R` |
-| 8 | **Destructive Interaction**。格点命中率；预注册预测被证实 | `R/run_grid_full.R`、docs/实验报告.md §10.1 |
+| 8 | **Destructive Interaction**。格点命中率；预注册预测被证实（附限定条件） | **`R/30_lattice_hit.R`（须新建，见 §8）**、`R/run_grid_full.R` |
 | 9 | **Does Selection Transfer?** 五级阶梯；7 对交换的逐对下限 | `R/25_size_ladder.R`、`R/28_ladder_pairs.R`、`R/27_weight_transfer.R` |
 | 10 | Discussion。统一表述；可操作建议；效度威胁 | — |
 | 11 | Conclusion | — |
@@ -80,8 +80,8 @@
 | L3 vs L2（glmnet，n=15） | +0.00617，d 21.46，15/15 |
 | L1 vs L2（xgboost，n=15） | +0.00039，d 3.42，15/15 |
 | 格点命中率 | L2 100.00% / L3 0.03–0.19% / L4 99.98–100.00% |
-| L4 vs L3（xgboost 全量） | 0.95443 对 0.94770 |
-| 编码前 L3 vs L4（Tier A） | 0.95951 对 0.95791（方向相反） |
+| **L3 vs L4（xgboost，三条件匹配）** | 20 万无编码 0.95951/0.95791（L3 领先 0.00160）；20 万有编码 0.95297/0.95221（L3 领先 0.00076）；**全量有编码 0.94770/0.95443（L4 领先 0.00673）** |
+| ⚠ 论文必须写清 | **编码在匹配样本量下只把差距减半，没有反转；反转需要编码 + 足够数据量同时具备。** 只报「全量反转了」是混淆比较 |
 | 阶梯 Spearman | 0.903 / 0.927 / 0.964 / 0.988 |
 | 选择遗憾 | 五级全部 0.00000 |
 | 权重迁移代价上界 | +0.00003，符号 10/10 一致 |
@@ -158,6 +158,7 @@
 
 | 文件 | 内容 |
 |---|---|
+| **`R/30_lattice_hit.R`** | **必须新建。** 格点命中率（0.03% / 100% / 99.98%）目前**没有任何脚本产出它**——是上一轮会话临时算的，只有数字留在 `docs/讨论区核查.md`。论文第 8 节最核心的机制证据不能建立在不可复现的测量上。本脚本重算并存 `output/lattice_hit.rds`。**若重算值与记录不符，以重算值为准，并在论文与报告中更正。** |
 | `paper/preprocessing-expressiveness.md` | 论文正文，作者处留 `[Author Name]` / `[Student ID]` / `[Affiliation]` |
 | `R/29_paper_figures.R` | 三张图的绘图脚本，照 MH6211 规范 |
 | `paper/figures/fig1_te_by_family.png` | 图 1 |
