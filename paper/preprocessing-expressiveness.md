@@ -306,3 +306,77 @@ When a pipeline has two preprocessing steps that could interact destructively, a
 ![Figure 3. (a) AUC of all 10 candidates across the sample-size ladder, the three declining L3 + tree-model cells highlighted. (b) Spearman ρ and Kendall τ with the full-data ranking, converging to 1.0.](figures/fig3_size_ladder.png)
 
 **Figure 3.** Panel (a) is the same decline §8 identifies, now shown across all five rungs; panel (b) is its aggregate consequence — rank correlation not yet 1.0 until those cells stop moving.
+
+---
+
+## 10. Discussion
+
+### 10.1 A Unified Account
+
+§5, §6, and §7 test the same account three times: the same imputation line wins for the tree-based families but loses for glmnet, because trees can already represent "missing" and glmnet cannot (§5); a hand-built ratio feature is redundant once a tree has enough splits to approximate it, though a four-term hyperplane is not (§6); and exact-value encoding is worth roughly eight times more to glmnet than to xgboost, because the two differ sharply in how expensively each can represent one specific value on its own (§7). In the two instances tested across model families (§5, §7), the same transform's benefit changes sign entirely, because "how hard to reconstruct" is a property of the model receiving it rather than of the transform or the data. §8 shows this value is fragile in a further way: when one transform's output leaves the domain a second transform depends on — regression imputation moving a value off the 0.01 lattice exact-value encoding needs — the two steps do not merely fail to compound, they actively destroy each other's contribution.
+
+### 10.2 Practical Advice
+
+Two pieces of advice follow directly from these results, offered as conclusions rather than as new claims.
+
+First, before adding a hand-built preprocessing step, ask whether the downstream model actually in use could already do it itself. If it can — a gradient-boosted tree approximating a ratio through enough splits (§6) — the preprocessing is redundant effort. If it cannot — a linear model with no native way to represent an exact value except by paying one parameter per value (§7) — the same step is likely to help, and the size of the help should scale with how completely the model is otherwise blocked from reconstructing it on its own.
+
+Second, as §9 concludes, when a pipeline contains two preprocessing steps that could plausibly interact — as imputation and exact-value encoding do here — their combination should be validated once at full scale rather than trusted to a subsample's ranking of them: §8's interaction is invisible below full scale, so only a full-scale check would catch it.
+
+### 10.3 Threats to Validity
+
+Five limitations bear on how far these results should be trusted to generalize.
+
+- **Single, synthetic dataset.** Every result in this paper is measured on one generated dataset. The 0.01 value lattice and the four-term hard constraint documented in §2.3 are properties of this specific generator, not necessarily of behavioral data in general; exact-value encoding's large measured gains (§7), which depend on values landing exactly on that lattice, may not transfer to real, non-synthetic data lacking this same structure.
+
+- **The sample-size ladder covers 10 candidates, not the full grid.** §9's five-point ladder omits L4's four cells for compute-cost reasons already stated there, leaving 10 of the grid's 14 cells. §9's zero-selection-regret and rank-inversion findings hold for those 10 candidates; nothing in this paper establishes that they extend to the four L4 cells the ladder never ran.
+
+- **Hyperparameter-selection transferability was not tested.** §9 verifies that choosing which model configuration to use, and how to weight members of an ensemble, transfers from a 200,000-row subsample to the full training set. It does not verify that tuning a configuration's hyperparameters on a subsample would transfer in the same way; that is a different, untested question.
+
+- **No 10-fold comparison was run.** Every comparison in this paper is measured on the single frozen 5-fold split fixed in §3.1, by design — the fold contract that keeps results collected at different times comparable to one another. Nothing here has been cross-checked against a higher-fold-count protocol.
+
+- **The §7 one-hot control is not a like-for-like comparison.** Table 7's ridge-logistic-regression figures are measured under this paper's own 5-fold protocol without interaction terms; the external, discussion-board figure they are compared against used 10-fold cross-validation with interaction terms. §7 flags this gap at the point the comparison is made; it is restated here as a formal threat to validity rather than as a new observation.
+
+---
+
+## 11. Conclusion
+
+This paper asked which missing-value treatment is best, and argued that the question has no answer independent of the model that will consume the result: a preprocessing step is worth exactly as much as it is hard for the downstream model to reconstruct on its own.
+
+Three independent instances demonstrated that this dependency is not a caveat but the main effect. Missing-value imputation reverses which treatment wins between the tree-based families and glmnet (§5); a derived ratio feature is redundant to a tree with enough splits to approximate it, but a four-term hyperplane is not (§6); and exact-value target encoding helps a linear model far more than it helps a gradient-boosted tree, because the two differ sharply in how expensively each can represent a single specific value on its own (§7). Beyond these three instances, the paper's most novel result is that two preprocessing steps can destroy, rather than merely fail to compound, each other's value when one's output leaves the domain the other depends on (§8) — a failure invisible below full data scale and, to our knowledge, not previously reported. A separate, independent finding closes the paper: a model configuration chosen cheaply on a small subsample transfers to the full dataset with zero selection regret, for configurations whose parameter count is fixed rather than growing with the number of distinct values they must represent (§9).
+
+None of this makes missing-value treatment, feature engineering, or encoding a solved problem in general. What it offers instead is a way to ask the question that has an answer: not "which preprocessing step is best," but "best for which model" — and, once two such steps share a pipeline, whether either one still means what it meant on its own.
+
+---
+
+## Acknowledgements
+
+Three ideas this paper builds on originated on the competition's discussion board rather than in this work: the four-term hard constraint used throughout §2.3 and §6, exact-value target encoding as a treatment for the dataset's numeric columns (§7), and rank-space ensemble stacking, used in the weight-transfer check in §9. This paper's contribution over those ideas is not originating them, but re-measuring them under this paper's own frozen cross-validation protocol (§3.1).
+
+---
+
+## References
+
+Breiman, L. (2001). Random forests. *Machine Learning*.
+
+Chen, T., & Guestrin, C. (2016). XGBoost: A scalable tree boosting system. *KDD 2016*.
+
+Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences*.
+
+Efron, B., & Tibshirani, R. J. (1993). *An Introduction to the Bootstrap*.
+
+Friedman, J., Hastie, T., & Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. *Journal of Statistical Software*.
+
+Hanley, J. A., & McNeil, B. J. (1982). The meaning and use of the area under a receiver operating characteristic (ROC) curve. *Radiology*.
+
+Kaufman, S., Rosset, S., & Perlich, C. (2012). Leakage in data mining: Formulation, detection, and avoidance. *KDD 2012*.
+
+Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., & Liu, T.-Y. (2017). LightGBM: A highly efficient gradient boosting decision tree. *NeurIPS 2017*.
+
+Little, R. J. A. (1988). Missing-data adjustments in large surveys. *Journal of Business & Economic Statistics*.
+
+Little, R. J. A., & Rubin, D. B. (n.d.). *Statistical Analysis with Missing Data*.
+
+Micci-Barreca, D. (2001). A preprocessing scheme for high-cardinality categorical attributes in classification and prediction problems. *SIGKDD Explorations*.
+
+Wright, M. N., & Ziegler, A. (2017). ranger: A fast implementation of random forests for high dimensional data in C++ and R. *Journal of Statistical Software*.
