@@ -265,7 +265,7 @@ The same mechanism yields a second, independent prediction: L3's three tree-fami
 
 This is an independent methodological contribution, not a fourth instance of the central thesis — though its rank inversions trace back to §8's mechanism.
 
-`R/25_size_ladder.R` runs the same 10 candidates — §4's grid minus L4's four cells, too costly to run at every rung, though the remaining 10 still span all four algorithms and the other three imputation lines, so this section's conclusions cover those 10, not all 14 — at five nested pool sizes, 50k ⊂ 100k ⊂ 200k ⊂ 400k ⊂ full (691,369). (Tier A: this same 200,000-row stratified subsample used for every comparison in §4–§7; the 200k rung is not redrawn.) Rows keep their original fold across sizes, so cross-size comparisons are not confounded by re-splitting.
+`R/25_size_ladder.R` runs the same 10 candidates — §4's grid minus L4's four cells, too costly to run at every rung, though the remaining 10 still span all four algorithms and the other three imputation lines, so this section's conclusions cover those 10, not all 14 — at five nested pool sizes, 50k ⊂ 100k ⊂ 200k ⊂ 400k ⊂ full (691,369). (Tier A: this same 200,000-row stratified subsample used for every comparison in §5–§7; the 200k rung is not redrawn.) Rows keep their original fold across sizes, so cross-size comparisons are not confounded by re-splitting.
 
 Three metrics: Spearman ρ against the full-data ranking; top-k hit, whether a size's top-k set matches full data's; and selection regret — the AUC gap, on full data, between what the smaller size would select and the true optimum, the metric that actually matters.
 
