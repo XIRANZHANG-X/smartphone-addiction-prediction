@@ -30,7 +30,7 @@ This paper makes three contributions.
 
 2. We identify and trace a failure mode that, as far as we are aware, has not previously been reported: two preprocessing steps in the same pipeline can destroy each other's value when the output of one leaves the domain the other requires. We trace this concretely to an interaction between regression-based imputation and exact-value encoding on this dataset's 0.01-valued lattice, and show the damage is invisible at moderate sample sizes and only visible at full scale.
 
-3. Independently of the above, we test whether a model configuration chosen cheaply — on a 200,000-row stratified subsample rather than the full 691,369-row training set — is the configuration one would have chosen on the full data. Using a five-level sample-size ladder, we find zero selection regret at every level, but the rank inversions that do occur are not random: they concentrate specifically among the configurations subject to the destructive interaction identified in the previous contribution, and are absent elsewhere in the comparison grid.
+3. Independently of the above, we test whether a model configuration chosen cheaply — on a 200,000-row stratified subsample rather than the full 691,369-row training set — is the configuration one would have chosen on the full data. Using a five-level sample-size ladder, we find zero selection regret at every level, but the rank inversions that do occur are not random: they concentrate specifically among the configurations subject to the destructive interaction identified in the previous contribution, and the one inversion elsewhere is a pair whose full-data gap lies below its own resolution floor — not a real misranking, but a tie neither sample size can resolve.
 
 The remainder of the paper is organized as follows. §2 describes the dataset and the task in more detail, including the generator's structural properties that later sections depend on. §3 sets out the experimental protocol — the frozen folds, the within-fold fitting discipline, and the statistical standard used to call a difference real — against which every subsequent result is measured. §4 reports the full grid of missing-value treatments crossed with model families; §5–§7 examine the three preprocessing instances behind the paper's central thesis in turn: imputation, a derived feature, and exact-value encoding. §8 shows how two of these preprocessing steps interact destructively. §9 asks whether conclusions reached on a subsample of the data transfer to the full dataset. §10 discusses the results together, and §11 concludes.
 
@@ -63,7 +63,7 @@ Together, these two facts reframe the prediction task. If the label were only we
 
 ### 2.3 The Generator's Structure: A Four-Term Constraint and a 0.01 Lattice
 
-The training and test data were synthetically generated for the competition, inspired by a real smartphone-addiction survey instrument, and the generator leaves two structural fingerprints in the data that matter for later sections.
+The training and test data were synthetically generated for the competition, inspired by the Smartphone Addiction Prediction Dataset, and the generator leaves two structural fingerprints in the data that matter for later sections.
 
 First, a hard constraint holds among four of the time-use features:
 
@@ -71,7 +71,7 @@ First, a hard constraint holds among four of the time-use features:
 daily_screen_time_hours ≥ social_media_hours + gaming_hours + work_study_hours
 ```
 
-Among the 421,427 rows where all four columns are observed, the inequality holds in 100.0000% of rows, and the minimum residual (the left side minus the right side) is exactly 0.000 — the constraint is occasionally tight. An earlier version of this check used only three terms, omitting `work_study_hours`; that version also held in 100% of rows, but its minimum residual was 0.100, not 0.000. Because the three-term inequality is implied by the four-term one — dropping a non-negative quantity from the right-hand side can only relax the inequality — the 0.100 minimum shows that the three-term version was never actually tight. It is a consequence of the true, four-term constraint rather than a boundary in its own right, and it is the four-term relation that we treat as the generator's real structural rule throughout this paper.
+Among the 421,427 rows where all four columns are observed, the inequality holds in 100.0000% of rows, and the minimum residual (the left side minus the right side) is exactly 0.000 (`R/17_discussion_checks.R`) — the constraint is occasionally tight. An earlier version of this check used only three terms, omitting `work_study_hours`; that version also held in 100% of rows, but its minimum residual was 0.100, not 0.000. Because the three-term inequality is implied by the four-term one — dropping a non-negative quantity from the right-hand side can only relax the inequality — the 0.100 minimum shows that the three-term version was never actually tight. It is a consequence of the true, four-term constraint rather than a boundary in its own right, and it is the four-term relation that we treat as the generator's real structural rule throughout this paper.
 
 Second, feature values are generated on a 0.01 grid, and the second decimal digit of a value correlates with the row's positive rate. This lattice structure is a property of the generator, not of the underlying construct being measured; §8 shows that it interacts consequentially with how missing values are imputed.
 
@@ -132,7 +132,7 @@ We measured this directly: three runs of the same lightgbm configuration returne
 
 ## 4. The 4×4 Grid
 
-Table 3 reports the full missing-value-treatment × model-family grid on the complete 691,369-row, 25-feature training set. ranger and glmnet cannot run L1 natively — neither can split on a missing value without first filling it — so the grid has 14 cells, not 16.
+Table 3 reports the full missing-value-treatment × model-family grid on the complete 691,369-row, 25-feature training set (`R/run_grid_full.R`). ranger and glmnet cannot run L1 natively — neither can split on a missing value without first filling it — so the grid has 14 cells, not 16.
 
 **Table 3.** Full-data grid: AUC by imputation line and model family.
 
@@ -149,7 +149,7 @@ Second, the gap between algorithm families (~0.03 AUC) dwarfs the gap between im
 
 Third, L3's three cells have a per-fold standard deviation 4–7× every other cell in the grid (0.0021–0.0034, versus ~0.0005 elsewhere) — a warning sign that these results are unusually sensitive to which fold's data was drawn, foreshadowing a mechanism §8 explains.
 
-Fourth, ranger jumps from 0.93960 to 0.96324 on the full grid once exact-value encoding is applied — a single preprocessing change that, for this algorithm specifically, nearly closes the gap to the boosted-tree families. §7 gives the mechanism.
+Fourth, ranger's gain from exact-value encoding is unusually large for this algorithm specifically — see Table 6 in §7 for the matched-size comparison and mechanism.
 
 ---
 
@@ -157,7 +157,7 @@ Fourth, ranger jumps from 0.93960 to 0.96324 on the full grid once exact-value e
 
 §4's grid is measured on the single frozen 5-fold split defined in §3.1. For comparisons close enough to warrant a sharper test, `R/09_repeated_cv.R` draws three additional independent 5-fold partitions, used **only to raise the paired sample size for this statistical test — never to alter the main results table**, which remains the one frozen split used everywhere else in this paper (the same discipline §3.1 already argues for). This raises the paired sample size from n = 5 to n = 15.
 
-**Table 4.** Paired imputation comparisons at n = 15.
+**Table 4.** Paired imputation comparisons at n = 15 (Tier A, 200,000-row pool).
 
 | Comparison | Mean diff | Cohen's d | Sign agreement |
 |---|---|---|---|
@@ -189,7 +189,7 @@ The budget-remainder feature is the residual of §2.3's four-term hard constrain
 
 ## 7. Instance 3: Exact-Value Encoding
 
-Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric columns' values with a smoothed estimate of the positive rate among training-fold rows sharing that exact value, fit within-fold per §3.2's discipline. Table 6 gives the gain from switching it on for each model family — the numbers behind Figure 1.
+Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric columns' values with a smoothed estimate of the positive rate among training-fold rows sharing that exact value, fit within-fold per §3.2's discipline. Table 6 gives the gain from switching it on for each model family — the numbers behind Figure 1 (`R/21_te_by_family.R`).
 
 **Table 6.** AUC gain from exact-value target encoding, by model family (Tier A, 200,000-row pool).
 
@@ -202,9 +202,9 @@ Exact-value target encoding (TE; Micci-Barreca, 2001) replaces each of 8 numeric
 
 ![Figure 1. AUC gain from exact-value target encoding, by model family. Bars show the mean over 5 frozen folds with 95% CI; points show individual folds.](figures/fig1_te_by_family.png)
 
-**Figure 1.** glmnet's gain over xgboost's, 0.03352 / 0.00424 ≈ 7.9×, is the same encoding step worth roughly eight times more to a model with no other way to represent an exact value.
+**Figure 1.** glmnet's gain over xgboost's, 0.03352 / 0.00424 ≈ 7.9×: the same encoding step is worth roughly eight times more to a model with no other way to represent an exact value.
 
-Gradient-boosted trees gain a comparatively modest ~0.004–0.005: an exact value's identity, like §6's ratio features, is something this family can approximate given enough splits even without being handed it directly. ranger gains roughly 5× that, because its individual trees are shallower and weaker, so the same help matters more. The same shift is larger still on the full grid, where §4 reports ranger rising from 0.93960 to 0.96324. glmnet gains roughly 8× that, because it has no mechanism at all for representing "this specific value" short of being handed one parameter per value — which is exactly what the encoding computes and hands it, compressed into a single learned statistic.
+Gradient-boosted trees gain a comparatively modest ~0.004–0.005: an exact value's identity, like §6's ratio features, is something this family can approximate given enough splits even without being handed it directly. ranger gains roughly 5× that, because its individual trees are shallower and weaker, so the same help matters more. glmnet gains roughly 8× that, because it has no mechanism at all for representing "this specific value" short of being handed one parameter per value — which is exactly what the encoding computes and hands it, compressed into a single learned statistic.
 
 ### One-hot control
 
@@ -237,7 +237,7 @@ Exact-value target encoding (§7) depends on a value landing on the generator's 
 | **L3 (regression)** | Arbitrary real number, off-lattice | **0.0450%** |
 | L4 (PMM) | Real donor value, on-lattice | 99.9990% |
 
-At least one column is missing in 61.06% of rows (§2.1), so this failure touches well over six in ten rows for L3 specifically.
+At least one column is missing in 61.06% of rows (§2.1) — an upper bound on how many rows this failure can touch, since the eight target-encoded columns are a subset of the twelve raw features.
 
 Two predictions were made in advance. L4 imputes real donor values, so its hit rate should stay near 100% — confirmed at 99.9990%. And if L3's problem is really that the table cannot find its values, then with encoding in the pipeline, L4 should overtake L3, since only L4 stays lookupable.
 
@@ -281,7 +281,7 @@ Three metrics: Spearman ρ against the full-data ranking; top-k hit, whether a s
 
 Selection regret is exactly zero at every size: even 50k (7.2% of the full data) selects the true full-data optimum. This is a separate claim from the ranking, which is not fully consistent.
 
-Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to full data. Each pair's own resolution floor was measured individually, since the floor is a property of the pair, not the dataset (§3.4):
+Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to full data (`R/28_ladder_pairs.R`). Each pair's own resolution floor was measured individually, since the floor is a property of the pair, not the dataset (§3.4):
 
 **Table 11.** The 7 pairs that invert order at some rung.
 
@@ -297,7 +297,7 @@ Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to ful
 
 Two facts follow. The only pair involving a top-5 configuration, L2_xgboost vs. L1_lightgbm, is a genuine tie: its full-data gap sits below that pair's own floor, so it has no determinate order at any size tested — not a small-sample error. The other 6 misrankings involve only L3_xgboost, L3_lightgbm, or L3_ranger — exactly the three cells §8 identifies as declining with n. Errors are not random; they concentrate entirely on the mechanism §8 already explains.
 
-A secondary check: the rank-space ensemble's weights, fit on 200k predictions vs. on full predictions and both applied to the same full-data member predictions, cost at most +0.00003 AUC — identical on the full 691,369 rows and on just the 491,369 rows the 200k weights never saw, both figures upper bounds since full-data weights get a same-data advantage 200k weights don't. This is below the paper's smallest resolution floor (0.000098, §3.4): the two weight sets are indistinguishable, and all 10 members agree in sign, including the 3 negative-weight ones.
+A secondary check (`R/27_weight_transfer.R`): the rank-space ensemble's weights, fit on 200k predictions vs. on full predictions and both applied to the same full-data member predictions, cost at most +0.00003 AUC — identical on the full 691,369 rows and on just the 491,369 rows the 200k weights never saw, both figures upper bounds since full-data weights get a same-data advantage 200k weights don't. This is below the paper's smallest resolution floor (0.000098, §3.4): the two weight sets are indistinguishable, and all 10 members agree in sign, including the 3 negative-weight ones.
 
 This conclusion holds only for methods with a fixed parameter count; one whose parameter count grows with the number of distinct values is systematically underestimated by a smaller sample. §7's one-hot control is the counterexample already in hand: 0.95583 at Tier A vs. 0.95929 at full, a 0.0035 gap attributable entirely to sample size — a different mechanism from §8's, despite the similar magnitude. All 10 candidates compared here have fixed parameter counts, so the zero-regret conclusion holds for them.
 
@@ -313,7 +313,7 @@ When a pipeline has two preprocessing steps that could interact destructively, a
 
 ### 10.1 A Unified Account
 
-§5, §6, and §7 test the same account three times: the same imputation line wins for the tree-based families but loses for glmnet, because trees can already represent "missing" and glmnet cannot (§5); a hand-built ratio feature is redundant once a tree has enough splits to approximate it, though a four-term hyperplane is not (§6); and exact-value encoding is worth roughly eight times more to glmnet than to xgboost, because the two differ sharply in how expensively each can represent one specific value on its own (§7). In the two instances tested across model families (§5, §7), the same transform's benefit changes sign entirely, because "how hard to reconstruct" is a property of the model receiving it rather than of the transform or the data. §8 shows this value is fragile in a further way: when one transform's output leaves the domain a second transform depends on — regression imputation moving a value off the 0.01 lattice exact-value encoding needs — the two steps do not merely fail to compound, they actively destroy each other's contribution.
+§5, §6, and §7 test the same account three times: the same imputation line wins for the tree-based families but loses for glmnet, because trees can already represent "missing" and glmnet cannot (§5); a hand-built ratio feature is redundant once a tree has enough splits to approximate it, though a four-term hyperplane is not (§6); and exact-value encoding is worth roughly eight times more to glmnet than to xgboost, because the two differ sharply in how expensively each can represent one specific value on its own (§7). In §5 the same transform's benefit changes sign entirely; in §7 it changes by nearly an order of magnitude — both because "how hard to reconstruct" is a property of the model receiving it rather than of the transform or the data. §8 shows this value is fragile in a further way: when one transform's output leaves the domain a second transform depends on — regression imputation moving a value off the 0.01 lattice exact-value encoding needs — the two steps do not merely fail to compound, they actively destroy each other's contribution.
 
 ### 10.2 Practical Advice
 

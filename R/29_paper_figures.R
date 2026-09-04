@@ -215,12 +215,12 @@ long <- melt(w, id.vars = "model", variable.name = "rung", value.name = "auc")
 long[, n := N_BY_RUNG[as.character(rung)]]
 # L3 的三个树模型格是唯一随样本量下降的，单独着色
 long[, family := fifelse(model %in% c("L3_xgboost", "L3_lightgbm", "L3_ranger"),
-                         "L3 + tree model (declines with n)", "All other candidates")]
+                         "L3 + tree model (peaks early, then declines)", "All other candidates")]
 
 p3a <- ggplot(long, aes(x = n, y = auc, group = model, color = family)) +
   geom_line(linewidth = 1.3) +
   geom_point(size = 2.6) +
-  scale_color_manual(values = c("L3 + tree model (declines with n)" = "#E15759",
+  scale_color_manual(values = c("L3 + tree model (peaks early, then declines)" = "#E15759",
                                 "All other candidates" = "#4E79A7"),
                      name = NULL) +
   scale_x_continuous(trans = "log10",
