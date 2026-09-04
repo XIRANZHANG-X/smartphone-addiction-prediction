@@ -222,3 +222,87 @@ An earlier draft of this paper claimed linear models "cannot represent exact-val
 A linear model *can*, then, do exact-value lookup; it simply needs one parameter per distinct value rather than the compression into a single learned statistic that target encoding provides. The thesis, refined here: what a model cannot do without help is exact-value lookup **without paying for it in parameters**, not exact-value lookup as such.
 
 A discussion-board post reported a higher AUC, 0.96005, for what looks like the same one-hot approach — but under a different protocol: 10-fold cross-validation with interaction terms, versus this paper's 5-fold without. The pair above and that external figure are **not a like-for-like comparison**; we do not present them as equivalent or attempt to adjust for the gap. §10 lists the mismatch among this paper's disclosed validity threats; the discussion board is credited in the Acknowledgements.
+
+---
+
+## 8. When Two Preprocessing Steps Destroy Each Other
+
+Exact-value target encoding (§7) depends on a value landing on the generator's 0.01 lattice (§2.3): the table is built from exactly-observed values. L2 (median) and L4 (PMM) impute real, on-lattice values and stay lookupable. L3 imputes a regression *prediction* — an arbitrary real number, off-lattice — so the table cannot find it and falls back to the global mean.
+
+**Table 8.** Share of imputed values found in the training-fold encoding table, pooled across 5 folds × 8 encoded columns (`R/30_lattice_hit.R`; within-fold per §3.2).
+
+| Line | What it imputes | Hit rate |
+|---|---|---|
+| L2 (median) | Real observed median, on-lattice | 100.0000% |
+| **L3 (regression)** | Arbitrary real number, off-lattice | **0.0450%** |
+| L4 (PMM) | Real donor value, on-lattice | 99.9990% |
+
+At least one column is missing in 61.06% of rows (§2.1), so this failure touches well over six in ten rows for L3 specifically.
+
+Two predictions were made in advance. L4 imputes real donor values, so its hit rate should stay near 100% — confirmed at 99.9990%. And if L3's problem is really that the table cannot find its values, then with encoding in the pipeline, L4 should overtake L3, since only L4 stays lookupable.
+
+The second prediction needs a real qualifier. Figure 2b changes one condition at a time (xgboost):
+
+**Table 9.** L3 vs. L4, three conditions, one change at a time (xgboost).
+
+| Condition | L3 | L4 | L4 − L3 | Winner |
+|---|---|---|---|---|
+| 200k, no encoding | 0.95951 | 0.95791 | −0.00160 | L3 |
+| 200k, encoding | 0.95297 | 0.95221 | −0.00076 | L3 |
+| Full 691k, encoding | 0.94770 | **0.95443** | **+0.00673** | **L4** |
+
+Two facts, not one. At matched sample size, encoding halves L3's lead (−0.00160 → −0.00076) without reversing it. The reversal appears only at full scale, because more data makes the encoding table more accurate on-lattice, widening the lookupable/non-lookupable gap — so L3's damage grows with n. Reversal needs encoding *and* scale together; the third row alone would wrongly suggest encoding is sufficient by itself.
+
+The same mechanism yields a second, independent prediction: L3's three tree-family cells — xgboost, lightgbm, ranger, not glmnet (§4–§5) — are the grid's only cells whose AUC declines as n grows (§4; full ladder resolution in §9). L4 was measured at only two ladder points, Tier A and full, so no five-point trend is implied for it — but at those two points, all three of its tree-family cells rise: xgboost 0.95221→0.95443, lightgbm 0.95209→0.95410, ranger 0.94885→0.95076 (`R/run_grid.R`, `R/run_grid_full.R`). L3 falling as L4 rises over the same interval, at the two points measured, is this mechanism's second prediction.
+
+![Figure 2. (a) Share of imputed values found in the encoding table, by imputation line. (b) L3 vs. L4 AUC (xgboost) across three matched conditions.](figures/fig2_lattice_mechanism.png)
+
+**Figure 2.** Panel (a) is the cause — L3's values are almost never found; panel (b) is the effect, a crossover visible only once enough data make the encoding table precise enough for that gap to dominate.
+
+---
+
+## 9. Does Model Selection Transfer from a Subsample?
+
+This is an independent methodological contribution, not a fourth instance of the central thesis — though its rank inversions trace back to §8's mechanism.
+
+`R/25_size_ladder.R` runs the same 10 candidates — §4's grid minus L4's four cells, too costly to run at every rung, though the remaining 10 still span all four algorithms and the other three imputation lines, so this section's conclusions cover those 10, not all 14 — at five nested pool sizes, 50k ⊂ 100k ⊂ 200k ⊂ 400k ⊂ full (691,369). (Tier A: this same 200,000-row stratified subsample used for every comparison in §4–§7; the 200k rung is not redrawn.) Rows keep their original fold across sizes, so cross-size comparisons are not confounded by re-splitting.
+
+Three metrics: Spearman ρ against the full-data ranking; top-k hit, whether a size's top-k set matches full data's; and selection regret — the AUC gap, on full data, between what the smaller size would select and the true optimum, the metric that actually matters.
+
+**Table 10.** Selection transfer across the ladder.
+
+| Pool size | Spearman ρ | Top-1 hit | Top-3 | Top-5 | Selection regret |
+|---|---|---|---|---|---|
+| 50k | 0.903 | yes | 3/3 | 5/5 | 0.00000 |
+| 100k | 0.927 | yes | 3/3 | 5/5 | 0.00000 |
+| 200k (Tier A) | 0.964 | yes | 3/3 | 5/5 | 0.00000 |
+| 400k | 0.988 | yes | 3/3 | 5/5 | 0.00000 |
+| Full | 1.000 | — | — | — | 0.00000 |
+
+Selection regret is exactly zero at every size: even 50k (7.2% of the full data) selects the true full-data optimum. This is a separate claim from the ranking, which is not fully consistent.
+
+Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to full data. Each pair's own resolution floor was measured individually, since the floor is a property of the pair, not the dataset (§3.4):
+
+**Table 11.** The 7 pairs that invert order at some rung.
+
+| Swapped pair | Occurs at | Full-data gap | Pair's floor | Verdict |
+|---|---|---|---|---|
+| L2_xgboost vs. L1_lightgbm | 50k, 100k | 0.00009 | 0.00011 | Tie — gap below the pair's own floor |
+| L3_glmnet vs. L3_xgboost | 100k | 0.00733 | 0.00053 | Real misranking |
+| L3_glmnet vs. L3_lightgbm | 50k | 0.01409 | 0.00058 | Real misranking |
+| L2_glmnet vs. L3_xgboost | 50k–200k | 0.00140 | 0.00054 | Real misranking |
+| L2_glmnet vs. L3_lightgbm | 50k–200k | 0.00817 | 0.00058 | Real misranking |
+| L3_xgboost vs. L3_lightgbm | 50k | 0.00677 | 0.00026 | Real misranking |
+| L3_lightgbm vs. L3_ranger | 400k | 0.00193 | 0.00052 | Real misranking |
+
+Two facts follow. The only pair involving a top-5 configuration, L2_xgboost vs. L1_lightgbm, is a genuine tie: its full-data gap sits below that pair's own floor, so it has no determinate order at any size tested — not a small-sample error. The other 6 misrankings involve only L3_xgboost, L3_lightgbm, or L3_ranger — exactly the three cells §8 identifies as declining with n. Errors are not random; they concentrate entirely on the mechanism §8 already explains.
+
+A secondary check: the rank-space ensemble's weights, fit on 200k predictions vs. on full predictions and both applied to the same full-data member predictions, cost at most +0.00003 AUC — identical on the full 691,369 rows and on just the 491,369 rows the 200k weights never saw, both figures upper bounds since full-data weights get a same-data advantage 200k weights don't. This is below the paper's smallest resolution floor (0.000098, §3.4): the two weight sets are indistinguishable, and all 10 members agree in sign, including the 3 negative-weight ones.
+
+This conclusion holds only for methods with a fixed parameter count; one whose parameter count grows with the number of distinct values is systematically underestimated by a smaller sample. §7's one-hot control is the counterexample already in hand: 0.95583 at Tier A vs. 0.95929 at full, a 0.0035 gap attributable entirely to sample size — a different mechanism from §8's, despite the similar magnitude. All 10 candidates compared here have fixed parameter counts, so the zero-regret conclusion holds for them.
+
+When a pipeline has two preprocessing steps that could interact destructively, as imputation and exact-value encoding do here, their combination must be validated once at full scale; everything else can safely be screened on a subsample.
+
+![Figure 3. (a) AUC of all 10 candidates across the sample-size ladder, the three declining L3 + tree-model cells highlighted. (b) Spearman ρ and Kendall τ with the full-data ranking, converging to 1.0.](figures/fig3_size_ladder.png)
+
+**Figure 3.** Panel (a) is the same decline §8 identifies, now shown across all five rungs; panel (b) is its aggregate consequence — rank correlation not yet 1.0 until those cells stop moving.
