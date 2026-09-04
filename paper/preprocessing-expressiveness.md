@@ -171,7 +171,7 @@ The first row used to be the shakiest comparison in the project: at n = 5 it was
 
 ## 6. Instance 2: Derived Features
 
-This is the weakest of the paper's three instances, and we say so plainly: unlike Instances 1 and 3, it shows no sign reversal across model families. The comparison below is xgboost-only — no equivalent glmnet measurement exists in the source data for this specific test, so no cross-family claim is made here.
+This is the weakest of the paper's three instances, and we say so plainly: unlike Instance 1's sign reversal or Instance 3's eightfold difference in magnitude, this instance makes no cross-family comparison at all. The comparison below is xgboost-only — no equivalent glmnet measurement exists in the source data for this specific test, so no cross-family claim is made here.
 
 On top of exact-value encoding (§7) already being present, three candidate features were priced individually on the 200,000-row Tier A pool, xgboost (`R/18_new_features.R`, `R/20_feature_v2.R`):
 
