@@ -107,15 +107,23 @@ To calibrate what a null effect looks like under this standard, we added a place
 
 ### 3.4 The Resolution Floor Is a Property of the Pair
 
-A further question is how large a paired difference needs to be before it is distinguishable from measurement noise at all — a resolution floor beneath the placebo check, which only characterizes what a null effect looks like on the folds already collected. `R/23_resolution.R` estimates this floor for a specific pair of configurations by bootstrap (Efron & Tibshirani, 1993): drawing 400 bootstrap resamples at the test set's size (296,302 rows), computing each configuration's AUC on every resample, and taking
+A further question is how large a paired difference needs to be before it is distinguishable from measurement noise at all — a resolution floor beneath the placebo check, which only characterizes what a null effect looks like on the folds already collected. We define the **resolution floor** for a pair of configurations as 1.96 times the standard deviation of the paired AUC difference, not that standard deviation alone — the half-width of a 95% confidence interval on the difference, and so the smallest difference distinguishable from noise at conventional confidence:
 
 ```
-SD(difference) = SD(single configuration's AUC) × √(2 × (1 − ρ))
+Resolution floor = 1.96 × SD(difference)
 ```
 
-where ρ is the correlation, across those resamples, between the two configurations' AUC estimates — not between their row-level predictions.
+`R/23_resolution.R` estimates SD(difference) for a specific pair of configurations by bootstrap (Efron & Tibshirani, 1993): drawing 400 bootstrap resamples at the test set's size (296,302 rows), computing each configuration's AUC on every resample, and taking the sample standard deviation of the 400 paired per-resample differences directly. Every resolution floor reported in this paper, including both rows of Table 2, is 1.96 times this bootstrap-measured SD(difference).
 
-The critical property of this quantity is that it depends on which two configurations are being compared, not on the dataset alone. Two configurations that are near-twins — the same underlying model family, differing only in which of the missing-value treatments defined in §4 is applied upstream (`L1_xgboost` vs. `L2_xgboost`) — have highly correlated AUC estimates (ρ = 0.984) and a resolution floor of 0.000098. A pair drawn from different model families entirely (`L1_xgboost` vs. `L3_ranger`) is far less correlated (ρ = 0.745) and has a resolution floor of 0.000564 — on the same data, nearly six times larger.
+A closed-form approximation to SD(difference) also exists,
+
+```
+SD(difference) ≈ SD(single configuration's AUC) × √(2 × (1 − ρ))
+```
+
+where ρ is the correlation, across those same resamples, between the two configurations' AUC estimates — not between their row-level predictions. This formula explains, qualitatively, why the floor depends on ρ at all — quantified after Table 2 — but no floor reported in this paper is computed by evaluating it: each is computed from the bootstrap-measured SD(difference) above, with the formula retained only as a secondary check on that measurement.
+
+The critical property of the resolution floor is that it depends on which two configurations are being compared, not on the dataset alone. Two configurations that are near-twins — the same underlying model family, differing only in which of the missing-value treatments defined in §4 is applied upstream (`L1_xgboost` vs. `L2_xgboost`) — have highly correlated AUC estimates (ρ = 0.984) and a resolution floor of 0.000098. A pair drawn from different model families entirely (`L1_xgboost` vs. `L3_ranger`) is far less correlated (ρ = 0.745) and has a resolution floor of 0.000564 — on the same data, nearly six times larger.
 
 **Table 2.** Resolution floor depends on which pair is compared, not on the dataset.
 
@@ -124,7 +132,9 @@ The critical property of this quantity is that it depends on which two configura
 | `L1_xgboost` vs. `L2_xgboost` | Same model family, near-twin | 0.984 | 0.000098 |
 | `L1_xgboost` vs. `L3_ranger` | Cross model family | 0.745 | 0.000564 |
 
-There is accordingly no single answer to how big a difference needs to be to count as real: it depends on which pair is being asked about. Every comparison in this paper that claims a real difference is checked against the floor for that specific pair rather than against one fixed threshold.
+These same two pairs bound how far the closed-form formula can be trusted. At ρ = 0.984, the formula's estimate of SD(difference) agrees closely with the bootstrap-measured value — 5.008×10⁻⁵ against a measured 5.013×10⁻⁵, a −0.1% deviation. At ρ = 0.745, the two diverge sharply: the formula gives 2.532×10⁻⁴ against a measured 2.879×10⁻⁴, underestimating the measured SD(difference) by 12.0%. The formula is a first-order approximation to the paired difference's variance and loses accuracy as ρ falls, exactly the regime the cross-family pair sits in. Because of this known inaccuracy, every resolution floor in this paper — Table 2's two rows included — is computed from the bootstrap-measured SD(difference), never from evaluating the formula directly; the formula's role here is to explain why ρ matters, not to supply any number this paper reports.
+
+There is accordingly no single answer to how big a difference needs to be to count as real: it depends on which pair is being asked about. Every comparison in this paper that claims a real difference is checked against the floor for that specific pair — 1.96 × the bootstrap-measured SD(difference) for that pair — rather than against one fixed threshold.
 
 ### 3.5 Reproducibility Statement
 
