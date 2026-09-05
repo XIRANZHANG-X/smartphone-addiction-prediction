@@ -105,6 +105,8 @@ With only 5 folds, comparing two configurations by a p-value computed across tho
 
 To calibrate what a null effect looks like under this standard, we added a placebo column — random noise, with a missingness pattern matched to a real column — as a negative control. Across the frozen folds, the placebo measures +0.00003 AUC, Cohen's d 0.11, with only 2 of 5 folds agreeing in sign: indistinguishable from adding nothing. Any feature or transform claimed to have a real effect in this paper is expected to clear this floor by a wide margin, not merely to be numerically positive.
 
+To characterize how often this standard could fire on pure noise rather than relying on this single placebo draw, we repeated the placebo comparison 30 times with independent random seeds: the criterion never fired (0/30), and the largest |Cohen's d| observed across all 30 repetitions was 0.874, well under the threshold of 2. This is an empirical observation from 30 repetitions, not a proven population false-positive rate, but it shows the criterion is strict in practice, not merely on paper.
+
 ### 3.4 The Resolution Floor Is a Property of the Pair
 
 A further question is how large a paired difference needs to be before it is distinguishable from measurement noise at all — a resolution floor beneath the placebo check, which only characterizes what a null effect looks like on the folds already collected. We define the **resolution floor** for a pair of configurations as 1.96 times the standard deviation of the paired AUC difference, not that standard deviation alone — the half-width of a 95% confidence interval on the difference, and so the smallest difference distinguishable from noise at conventional confidence:
