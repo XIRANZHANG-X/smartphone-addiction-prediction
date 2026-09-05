@@ -31,7 +31,7 @@
 ## 当前进度
 
 **全部代码已完成并跑通，已两次提交 Kaggle。**
-[方法学审查](docs/审查响应.md)的 13 条全部闭环（12 条修复 + 1 条附理由不采纳）。
+[方法学审查的逐条回应](docs/审查响应.md)：13 条全部闭环（12 条修复 + 1 条附理由不采纳）。
 
 | 阶段 | 本地 CV | Kaggle 榜单 |
 |---|---|---|
@@ -46,7 +46,7 @@
 **本地验证已被榜单二次验证**：两次提交的 CV 与 LB 差值稳定在 +0.0014；
 第二次提交前据此预测 0.96623，实际 0.96627，误差 4×10⁻⁵。
 
-8 张图表见 `reports/figures/`。详细状态见 [docs/进度.md](docs/进度.md)。
+13 张图表见 `reports/figures/`（fig1~fig8 为分析型，fig9~fig11 为基础层 EDA）。
 
 ## 文档索引
 
@@ -54,14 +54,12 @@
 |---|---|
 | [**docs/实验报告.md**](docs/实验报告.md) | **组员从这里开始** —— 全部实验结果与结论的统一汇总，含子样本有效性验证 |
 | [docs/项目总览.md](docs/项目总览.md) | 方法说明：工作流程、特征工程、每一步的理由，含全部图表 |
-| [docs/进度.md](docs/进度.md) | 已完成 / 待完成 / 实验结果，项目状态的唯一真源 |
 | [docs/审查响应.md](docs/审查响应.md) | 对方法学审查的逐条回应（含一条**不采纳**及其理由） |
 | [docs/讨论区核查.md](docs/讨论区核查.md) | 竞赛讨论区 54 帖的做法核查：复现了什么、我们漏了什么、不采纳什么 |
 | [output/results.md](output/results.md) | 全部实验数字，由 `R/11_report.R` 自动生成 |
 | [docs/项目说明.md](docs/项目说明.md) | 技术细节：完整推理链、配对检验、方法学声明 |
-| [docs/小组分工.md](docs/小组分工.md) | 10 人分工、每人的产出与验收标准 |
-| [docs/时间线.md](docs/时间线.md) | 16 天计划、两个硬门禁 |
-| [docs/superpowers/specs/](docs/superpowers/specs/) | 完整设计文档（含已被实测推翻的原始假设） |
+| [paper/preprocessing-expressiveness.md](paper/preprocessing-expressiveness.md) | 论文全文（英文），含 PDF 版本 |
+| [slides/](slides/) | 答辩幻灯片与逐页文案 |
 
 ---
 
@@ -137,18 +135,22 @@ IMPUTE_CACHE=1 TIER=B \
 │   ├── 05_impute_L*.R   四条插补线
 │   ├── 06_model_*.R     ★ 每人一个文件，互不干扰
 │   ├── 07_ensemble.R    集成
-│   └── 08_submit.R      生成提交文件
+│   ├── 08_submit.R      生成提交文件
+│   ├── 09_*.R ~ 41_*.R  专项实验与 EDA（消融、校准、重复 CV、分辨率下限、
+│   │                    基础层描述性分析、缺失联合结构等，每个脚本自带用法注释）
+│   └── deck_figures.R   答辩用英文数据图
 ├── data/raw/            原始数据（不进 git）
 ├── output/              folds.rds 等契约产物
-├── reports/figures/     8 张图表（300 dpi，可直接用于汇报）
-├── slides/              汇报幻灯片
+├── paper/               论文全文（md + pdf）与论文图
+├── reports/figures/     13 张图表（300 dpi，可直接用于汇报）
+├── slides/              答辩幻灯片与逐页文案
 ├── submissions/         提交记录 + log.csv 分数台账
 └── docs/                中文文档
 ```
 
 ---
 
-## 协作规则（三条，请务必遵守）
+## 协作规则（四条，请务必遵守）
 
 **1. `output/folds.rds` 冻结后任何人不得重新生成。**
 它是所有人分数可比的唯一基础。重跑一次，全组之前的实验结果全部作废。
