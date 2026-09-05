@@ -30,7 +30,7 @@ This paper makes three contributions.
 
 2. We identify and trace a failure mode that, as far as we are aware, has not previously been reported: two preprocessing steps in the same pipeline can destroy each other's value when the output of one leaves the domain the other requires. We trace this concretely to an interaction between regression-based imputation and exact-value encoding on this dataset's 0.01-valued lattice, and show the damage is invisible at moderate sample sizes and only visible at full scale.
 
-3. Independently of the above, we test whether a model configuration chosen cheaply — on a 200,000-row stratified subsample rather than the full 691,369-row training set — is the configuration one would have chosen on the full data. Using a five-level sample-size ladder, we find zero selection regret at every level, but the rank inversions that do occur are not random: they concentrate specifically among the configurations subject to the destructive interaction identified in the previous contribution, and the one inversion elsewhere is a pair whose full-data gap lies below its own resolution floor — not a real misranking, but a tie neither sample size can resolve.
+3. Independently of the above, we test whether a model configuration chosen cheaply — on a 200,000-row stratified subsample rather than the full 691,369-row training set — is the configuration one would have chosen on the full data. Using a five-level sample-size ladder, we find zero selection regret at every level, but the rank inversions that do occur are not random: they concentrate specifically among the configurations subject to the destructive interaction identified in the previous contribution, and the one inversion elsewhere involves a pair whose full-data gap sits below its own resolution floor — not a real misranking, though a formal equivalence check does not confirm the two configurations are indistinguishable either, so the evidence for this pair is best read as inconclusive rather than a confirmed tie.
 
 The remainder of the paper is organized as follows. §2 describes the dataset and the task in more detail, including the generator's structural properties that later sections depend on. §3 sets out the experimental protocol — the frozen folds, the within-fold fitting discipline, and the statistical standard used to call a difference real — against which every subsequent result is measured. §4 reports the full grid of missing-value treatments crossed with model families; §5–§7 examine the three preprocessing instances behind the paper's central thesis in turn: imputation, a derived feature, and exact-value encoding. §8 shows how two of these preprocessing steps interact destructively. §9 asks whether conclusions reached on a subsample of the data transfer to the full dataset. §10 discusses the results together, and §11 concludes.
 
@@ -303,7 +303,7 @@ Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to ful
 
 | Swapped pair | Occurs at | Full-data gap | Pair's floor | Verdict |
 |---|---|---|---|---|
-| L2_xgboost vs. L1_lightgbm | 50k, 100k | 0.00009 | 0.00011 | Tie — gap below the pair's own floor |
+| L2_xgboost vs. L1_lightgbm | 50k, 100k | 0.00009 | 0.00011 | Inconclusive — 95% CI [−0.00003, +0.00019] not fully within ±0.00011 |
 | L3_glmnet vs. L3_xgboost | 100k | 0.00733 | 0.00053 | Real misranking |
 | L3_glmnet vs. L3_lightgbm | 50k | 0.01409 | 0.00058 | Real misranking |
 | L2_glmnet vs. L3_xgboost | 50k–200k | 0.00140 | 0.00054 | Real misranking |
@@ -311,7 +311,19 @@ Of 45 pairs among the 10 candidates, 7 invert order at some rung relative to ful
 | L3_xgboost vs. L3_lightgbm | 50k | 0.00677 | 0.00026 | Real misranking |
 | L3_lightgbm vs. L3_ranger | 400k | 0.00193 | 0.00052 | Real misranking |
 
-Two facts follow. The only pair involving a top-5 configuration, L2_xgboost vs. L1_lightgbm, is a genuine tie: its full-data gap sits below that pair's own floor, so it has no determinate order at any size tested — not a small-sample error. The other 6 misrankings involve only L3_xgboost, L3_lightgbm, or L3_ranger — exactly the three cells §8 identifies as declining with n. Errors are not random; they concentrate entirely on the mechanism §8 already explains.
+Two facts follow. The only pair involving a top-5 configuration, L2_xgboost vs.
+L1_lightgbm, cannot be resolved in either direction: its full-data gap (0.00009)
+sits below that pair's own resolution floor (0.00011), so no resolvable difference
+can be claimed, but a formal CI-inclusion equivalence check — a 95% percentile
+bootstrap CI for the gap, [-0.00003, +0.00019], built from the same 400 resamples
+underlying the floor (`R/34_tie_equivalence.R`) — does not sit entirely within
+±0.00011 either (only 67.5% of the 400 resampled differences fall inside that
+margin). The honest reading is that the available data confirm neither a real
+difference nor genuine equivalence for this pair, not that the two configurations
+have been shown equivalent. The other 6 misrankings involve only L3_xgboost,
+L3_lightgbm, or L3_ranger — exactly the three cells §8 identifies as declining
+with n. Errors are not random; they concentrate entirely on the mechanism §8
+already explains.
 
 A secondary check (`R/27_weight_transfer.R`): the rank-space ensemble's weights, fit on 200k predictions vs. on full predictions and both applied to the same full-data member predictions, cost at most +0.00003 AUC — identical on the full 691,369 rows and on just the 491,369 rows the 200k weights never saw, both figures upper bounds since full-data weights get a same-data advantage 200k weights don't. This is below the paper's smallest resolution floor (0.000098, §3.4): the two weight sets are indistinguishable, and all 10 members agree in sign, including the 3 negative-weight ones.
 
