@@ -1,7 +1,7 @@
 # =============================================================================
-# 32_residual_exceptions.R —— 谁打破了近乎确定的规律
+# 37_residual_exceptions.R —— 谁打破了近乎确定的规律
 #
-# 用法：Rscript R/32_residual_exceptions.R
+# 用法：Rscript R/37_residual_exceptions.R
 # 产出：output/residual_exceptions.rds、控制台报表
 #
 # -----------------------------------------------------------------------------

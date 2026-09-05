@@ -1,13 +1,13 @@
 # =============================================================================
-# 35_universally_hard_rows.R —— 所有模型都判断错误的行长什么样
+# 40_universally_hard_rows.R —— 所有模型都判断错误的行长什么样
 #
-# 用法：Rscript R/35_universally_hard_rows.R
+# 用法：Rscript R/40_universally_hard_rows.R
 # 产出：output/universally_hard_rows.rds、控制台报表
 #
 # -----------------------------------------------------------------------------
 # 要回答的问题
 # -----------------------------------------------------------------------------
-# R/32_residual_exceptions.R 用「屏幕时间分箱的多数标签」这个自己造的代理
+# R/37_residual_exceptions.R 用「屏幕时间分箱的多数标签」这个自己造的代理
 # 指标去找「例外行」。这个脚本换一个更硬的做法：直接用真实的交叉验证预测，
 # 在同一个 20 万行子样本、同一套折叠上，找「不管插补方式、不管算法，
 # 全部模型都判断错误」的那批行。
@@ -123,7 +123,7 @@ cat(sprintf("难行平均缺失特征数：%.2f；其余行：%.2f\n",
             mean(dt[is_hard == FALSE]$n_missing_row)))
 
 # ---- 跟发现 17（残差例外）的重叠度 -------------------------------------------
-hr("跟 R/32_residual_exceptions.R 的『例外行』定义是否重叠")
+hr("跟 R/37_residual_exceptions.R 的『例外行』定义是否重叠")
 one <- dt[!is.na(daily_screen_time_hours), .(row_id, daily_screen_time_hours, addicted_label)]
 one[, bin := floor(daily_screen_time_hours)]
 bin_rate <- one[, .(rate = mean(addicted_label)), by = bin]

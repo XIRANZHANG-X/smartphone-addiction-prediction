@@ -1,7 +1,7 @@
 # =============================================================================
-# 33_constraint_faithfulness.R —— 插补方法对硬约束有多不老实
+# 38_constraint_faithfulness.R —— 插补方法对硬约束有多不老实
 #
-# 用法：Rscript R/33_constraint_faithfulness.R
+# 用法：Rscript R/38_constraint_faithfulness.R
 # 产出：output/constraint_faithfulness.rds、控制台报表
 #
 # -----------------------------------------------------------------------------

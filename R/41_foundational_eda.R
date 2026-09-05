@@ -1,7 +1,7 @@
 # =============================================================================
-# 36_foundational_eda.R —— 基础层 EDA：分布、相关性、缺失联合结构
+# 41_foundational_eda.R —— 基础层 EDA：分布、相关性、缺失联合结构
 #
-# 用法：Rscript R/36_foundational_eda.R
+# 用法：Rscript R/41_foundational_eda.R
 # 产出：reports/figures/fig9_特征分布.png
 #       reports/figures/fig10_相关性热力图.png
 #       reports/figures/fig11_缺失联合结构.png
