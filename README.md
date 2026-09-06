@@ -1,181 +1,249 @@
-# 智能手机成瘾预测
+# Smartphone Addiction Prediction
 
-> 课程小组项目 · 10 人 · 交付 2026-09-06 · 汇报 2026-09-08
-
-用 R 预测用户是否手机成瘾。评价指标 **ROC-AUC**，Kaggle 站内赛实时榜。
-
----
-
-## 一句话说清这个项目在做什么
-
-数据里 **61% 的行至少缺一个特征**，而标签在数据完整时几乎是确定的。所以这**不是一道建模题，是一道缺失数据题**——名次差异出现在小数点后第三位。
-
-我们原本打赌「用数据的硬约束做精细插补」能赢：
-
-```
-每日屏幕时间 >= 社交媒体时间 + 游戏时间 + 工作学习时间   （421,427 行中 100% 成立）
-```
-
-**这个赌打输了**，而输的过程比赢更有价值。项目最终的核心结论是一个交互效应：
-
-> **同一项预处理，在梯度提升树上可以是最差的，在线性模型上是决定性最优的。**
-> **一项预处理的价值，等于该变换有多难被下游模型自己造出来。**
-> 这条结论有三个独立实例（插补、派生比值、逐取值编码），方向完全一致；
-> 最极端的一个：同一个编码在 glmnet 上值 +0.0335，在 xgboost 上只值 +0.0042。
-
-完整的推理链（三次自我证伪 + 一次成功的反向预测，每步都有配对检验）见
-[docs/项目说明.md](docs/项目说明.md) 第六节。
+Predicting whether a user is addicted to their smartphone, in R. Metric: **ROC-AUC**.
+Kaggle in-class competition, live leaderboard.
 
 ---
 
-## 当前进度
+## 1. The Task
 
-**全部代码已完成并跑通，已两次提交 Kaggle。**
-[方法学审查的逐条回应](docs/审查响应.md)：13 条全部闭环（12 条修复 + 1 条附理由不采纳）。
+Given 12 self-reported usage and lifestyle variables, predict the binary label
+`addicted_label`.
 
-| 阶段 | 本地 CV | Kaggle 榜单 |
-|---|---|---|
-| 初始基线（固定 600 轮） | 0.95910 | — |
-| 加早停 | 0.96088 | — |
-| 加超参数搜索 | 0.96145 | — |
-| 最优单模型（全量，编码前） | 0.96465 | — |
-| **九成员集成 —— 提交的就是它** | **0.96487** | **0.96627** |
-| 赛后：更正两处定义 + 逐取值编码，最优单模型 | **0.96784** | 赛后，榜单已关闭 |
-| 赛后：十四成员集成（秩空间 logistic） | **0.96807** | 同上 |
-
-**本地验证已被榜单二次验证**：两次提交的 CV 与 LB 差值稳定在 +0.0014；
-第二次提交前据此预测 0.96623，实际 0.96627，误差 4×10⁻⁵。
-
-13 张图表见 `reports/figures/`（fig1~fig8 为分析型，fig9~fig11 为基础层 EDA）。
-
-## 文档索引
-
-| 文档 | 内容 |
+| | |
 |---|---|
-| [**docs/实验报告.md**](docs/实验报告.md) | **组员从这里开始** —— 全部实验结果与结论的统一汇总，含子样本有效性验证 |
-| [docs/项目总览.md](docs/项目总览.md) | 方法说明：工作流程、特征工程、每一步的理由，含全部图表 |
-| [docs/审查响应.md](docs/审查响应.md) | 对方法学审查的逐条回应（含一条**不采纳**及其理由） |
-| [docs/讨论区核查.md](docs/讨论区核查.md) | 竞赛讨论区 54 帖的做法核查：复现了什么、我们漏了什么、不采纳什么 |
-| [output/results.md](output/results.md) | 全部实验数字，由 `R/11_report.R` 自动生成 |
-| [docs/项目说明.md](docs/项目说明.md) | 技术细节：完整推理链、配对检验、方法学声明 |
-| [paper/preprocessing-expressiveness.md](paper/preprocessing-expressiveness.md) | 论文全文（英文），含 PDF 版本 |
-| [slides/](slides/) | 答辩幻灯片与逐页文案 |
+| Training set | 691,369 rows (`id` 0 – 691368), labelled |
+| Test set | 296,302 rows (`id` 691369 – 987670), unlabelled |
+| Metric | ROC-AUC |
+| Positive rate | 0.7094 (an all-constant submission at this value scores AUC = 0.5) |
+
+### Features
+
+Nine numeric, three categorical. **Every column has missing values.**
+
+| Feature | Meaning | Missing rate |
+|---|---|---|
+| `age` | age in years | 4.18% |
+| `daily_screen_time_hours` | daily screen time (hours) | 13.86% |
+| `social_media_hours` | social media time | 19.38% |
+| `gaming_hours` | gaming time | 18.34% |
+| `work_study_hours` | work / study time | 7.45% |
+| `sleep_hours` | sleep time | 6.43% |
+| `notifications_per_day` | notifications received per day | 9.78% |
+| `app_opens_per_day` | app opens per day | 11.67% |
+| `weekend_screen_time` | weekend screen time | 16.21% |
+| `gender` | Male / Female / Other | 4.20% |
+| `stress_level` | High / Medium / Low | 7.98% |
+| `academic_work_impact` | Yes / No | 6.40% |
+
+Only **269,185 rows (38.94%)** are complete; the remaining **61%** are missing at
+least one feature. The label is close to deterministic once a row is complete, so
+in practice this is a missing-data problem rather than a modelling problem —
+leaderboard separation happens in the third decimal place.
+
+The data also carries a hard generator constraint, which several of the
+imputation lines exploit:
+
+```
+daily_screen_time_hours >= social_media_hours + gaming_hours + work_study_hours
+```
+
+It holds in 100% of the 421,427 rows where all four columns are observed.
+
+**The data is not in this repository** (~70 MB, and competition data should not be
+redistributed). Download it from the Kaggle competition page — see
+[§3, step 2](#step-2-get-the-data).
 
 ---
 
-## 快速开始
+## 2. Code Directory
+
+```
+├── R/                   all code
+│   ├── 00_setup.R       package installation + environment check
+│   ├── 01_load.R        read the raw CSVs, pin column types
+│   ├── 02_eda.R         exploratory analysis
+│   ├── 03_features.R    feature engineering (single source of truth)
+│   ├── 04_folds.R       ★ the fold contract — frozen, must not be regenerated
+│   ├── 05_impute_L*.R   the four imputation lines (see below)
+│   ├── 06_framework.R   shared CV loop, tier selection, leakage guards, I/O
+│   ├── lib_models.R     model factories: make_xgb/make_lgb/make_ranger/make_glmnet
+│   ├── 06_model_*.R     ★ one thin config file per model × imputation line
+│   ├── 07_ensemble.R    ensembling over all out-of-fold predictions
+│   ├── 08_submit.R      write the Kaggle submission file
+│   ├── 09_*.R … 41_*.R  focused experiments and EDA (ablation, calibration,
+│   │                    repeated CV, resolution floor, adversarial controls,
+│   │                    distributional EDA, joint missingness structure, …)
+│   │                    Every script carries its own usage comment at the top.
+│   ├── run_grid.R       the 4 × 4 comparison grid (200k subsample)
+│   ├── run_grid_full.R  the same grid on the full training set
+│   ├── run_tierb.R      full-data retraining of the selected models
+│   ├── run_pipeline.R   one-shot driver for every experiment
+│   └── deck_figures.R   English figures for the presentation deck
+├── data/raw/            raw competition data (not in git)
+├── output/              fold contract and experiment artifacts (mostly not in git)
+├── paper/               full paper (Markdown + PDF) and its figures
+├── reports/figures/     13 figures, 300 dpi
+├── slides/              presentation deck and per-slide script
+├── submissions/         submission log with leaderboard scores
+└── docs/                detailed write-ups (Chinese)
+```
+
+### The four imputation lines
+
+Each line is a different answer to "what do we do about the 61%":
+
+| Line | Approach | Compatible models |
+|---|---|---|
+| **L1** | No imputation — feed `NA` straight to the model | xgboost, lightgbm only (they learn a default split direction per node) |
+| **L2** | Median / mode fill | all |
+| **L3** | Constraint-aware imputation using the generator identity above | all |
+| **L4** | Predictive mean matching (chained random forests, `missRanger`) | all |
+
+### Three-layer model code
+
+Adding a model touches exactly one file.
+
+| Layer | File | Responsibility |
+|---|---|---|
+| Framework | `R/06_framework.R` | data loading, tier selection, the leakage-safe CV loop, saving results. Shared — do not edit |
+| Models | `R/lib_models.R` | factories `make_xgb()` / `make_lgb()` / `make_ranger()` / `make_glmnet()`; early stopping written once |
+| Config | `R/06_model_*.R` | ~27 lines — three config variables and one `fit_predict <- make_xgb()` |
+
+**Fold discipline (why the framework exists).** Both imputation and per-value
+target encoding are fitted **inside each fold**. Fitting either on the full
+training set and then applying it — even using the same folds — leaks validation
+labels into the training rows and inflates CV. The framework already handles
+this; `R/06_model_TEMPLATE.R` shows the correct loop structure.
+
+---
+
+## 3. Reproducing the Results
+
+### Requirements
+
+R **≥ 4.2** (developed on 4.6.1). Versions below 4.2 have no native UTF-8 support
+on Windows.
+
+Packages installed on top of base R — `R/00_setup.R` installs all of them and
+verifies the library path is writable:
+
+| Package | Used for |
+|---|---|
+| `data.table` | reading and manipulating 690k rows (`read.csv` is unusable at this size) |
+| `xgboost` | gradient boosting, native `NaN` handling |
+| `lightgbm` | gradient boosting, native `NaN` handling, usually faster |
+| `ranger` | random forest |
+| `glmnet` | regularised logistic regression, the interpretable baseline |
+| `pROC` | AUC computation |
+| `missRanger` | chained random-forest PMM imputation for line L4 |
+| `renv` | dependency version locking (optional) |
+| `ggplot2` | figures (optional) |
+| `knitr`, `rmarkdown` | report rendering (optional) |
+
+Exact versions are pinned in `renv.lock`.
+
+### Step 1: Set up the environment
 
 ```r
-# 1. 在 RStudio 里打开 smartphone-addiction-prediction.Rproj
-# 2. 装包（只需一次）
-source("R/00_setup.R")
-
-# 3. 数据不在 git 里，需自行从 Kaggle 竞赛页下载并放入 data/raw/
-#    train.csv  test.csv  sample_submission.csv
-
-# 4. 生成共享产物（折叠契约，全组只跑一次）
-source("R/01_load.R")
-source("R/03_features.R")
-source("R/04_folds.R")
+# open smartphone-addiction-prediction.Rproj in RStudio, then:
+source("R/00_setup.R")   # run once
 ```
 
-### 实验产物：从 Releases 拿，不要重跑
+### Step 2: Get the data
 
-`output/` 整个在 `.gitignore` 里（只有 `folds.rds`、`subsample_200k.rds`、
-`results.md` 三个例外），所以 clone 之后是空的。跑一遍全部实验要七八个小时。
+Download from the Kaggle competition page and place these three files in
+`data/raw/`:
 
-**[Releases](https://github.com/XIRANZHANG-X/smartphone-addiction-prediction/releases) → 下最新的 `artifacts-YYYY-MM-DD.zip`，解压后把 `output/` 覆盖到项目根目录。**
+```
+train.csv   test.csv   sample_submission.csv
+```
 
-里面有全量 4×4 网格（14 格）、Tier A 网格、样本量阶梯四级、重复 CV
-与全部专项结果。**不含**竞赛数据本身（`raw_train.rds` / `raw_test.rds` /
-`features_raw.rds`）——那三个由上面第 3、4 步自己生成，几秒钟。
+### Step 3: Build the shared artifacts
 
-> 为什么不直接提交进 git：`output/` 有 819 MB，而 git 会永久保存每一个版本，
-> 每次重跑网格都会再增加约 75–100 MB 且删不掉。Release 附件不进 git 历史。
+```r
+source("R/01_load.R")      # read and type-pin the CSVs
+source("R/03_features.R")  # feature engineering
+source("R/04_folds.R")     # the fold contract — takes seconds
+```
 
----
+`output/folds.rds` is committed to git and is the reason every score in this
+project is comparable. **Regenerating it invalidates every previous result.**
 
-## 代码架构
+### Step 4: Get the experiment artifacts
 
-模型代码分三层，加一个功能只需改一处：
+A full re-run of every experiment takes **7–8 hours**. You almost certainly want
+the pre-computed artifacts instead.
 
-| 层 | 文件 | 职责 |
-|---|---|---|
-| 框架 | `R/06_framework.R` | 数据加载、Tier 选择、**防泄漏的 CV 循环**、存盘。共用，不要改 |
-| 模型 | `R/lib_models.R` | 工厂 `make_xgb()` / `make_lgb()` / `make_ranger()` / `make_glmnet()`，早停只写一遍 |
-| 配置 | `R/06_model_*.R` | **27 行**，只有三个配置变量和一行 `fit_predict <- make_xgb()` |
+`output/` is gitignored apart from three frozen files (`folds.rds`,
+`subsample_200k.rds`, `results.md`), so a fresh clone starts empty.
 
-环境变量覆盖，不用为跑变体去改 14 个文件：
+> **[Releases](https://github.com/XIRANZHANG-X/smartphone-addiction-prediction/releases)
+> → download the latest `artifacts-YYYY-MM-DD.zip`, unzip, and copy `output/`
+> over the project root.**
+
+The archive contains the full 4 × 4 grid (14 cells), the Tier A grid, all four
+rungs of the sample-size ladder, repeated CV, and every focused experiment. It
+does **not** contain the competition data itself (`raw_train.rds`,
+`raw_test.rds`, `features_raw.rds`) — those are produced by step 3 in seconds.
+
+Why not commit `output/` directly: it is 819 MB, and git keeps every version
+forever, so each grid re-run would add another 75–100 MB that can never be
+removed. Release attachments stay out of git history.
+
+### Step 5: Re-run experiments (optional)
+
+One command runs everything, in dependency order, cheapest-and-most-informative
+first:
 
 ```bash
-TIER=B        Rscript R/06_model_L1_xgboost.R   # 全量重训
-REPEAT_ID=1   Rscript R/06_model_L1_xgboost.R   # 重复 CV
-USE_DERIVED=0 Rscript R/06_model_L1_xgboost.R   # 关掉派生特征
-USE_TE=0      Rscript R/06_model_L1_xgboost.R   # 关掉逐取值编码
+Rscript R/run_pipeline.R
+```
+
+Ten steps: comparison grid → feature ablation → xgboost hyperparameter search →
+glmnet alpha sweep → probability calibration → repeated CV (n=15) → full-data
+retraining → ensembling → submission file → results table. Every step skips
+itself if its output already exists, so an interrupted run resumes by simply
+re-running it. `Rscript R/run_pipeline.R 3` starts at step 3; `FORCE=1` re-runs
+regardless of existing outputs.
+
+Individual variants are driven by environment variables — no need to edit the 14
+model config files:
+
+```bash
+TIER=B         Rscript R/06_model_L1_xgboost.R   # full-data retrain
+REPEAT_ID=1    Rscript R/06_model_L1_xgboost.R   # repeated CV
+USE_DERIVED=0  Rscript R/06_model_L1_xgboost.R   # disable derived features
+USE_TE=0       Rscript R/06_model_L1_xgboost.R   # disable per-value target encoding
 POOL_FILE=output/pools/pool_100k.rds \
-              Rscript R/06_model_L1_xgboost.R   # 指定行池（样本量阶梯用）
+               Rscript R/06_model_L1_xgboost.R   # explicit row pool (sample-size ladder)
 IMPUTE_CACHE=1 TIER=B \
-              Rscript R/06_model_L4_xgboost.R   # 缓存复用插补结果（L4 专用）
+               Rscript R/06_model_L4_xgboost.R   # reuse cached imputations (L4 only)
 ```
 
-`IMPUTE_CACHE=1` 是 L4 的必备项：四个算法在同一折上拿到的 PMM 插补逐位相同，
-缓存后全量四格从 15.6 小时降到 4.2 小时。等价性见 `R/26_cache_check.R`。
+`IMPUTE_CACHE=1` is essentially mandatory for L4: all four algorithms receive
+bit-identical PMM imputations on a given fold, so caching cuts the four full-data
+L4 cells from 15.6 hours to 4.2. The equivalence is verified in
+`R/26_cache_check.R`.
 
-一键跑完全部实验：`Rscript R/run_pipeline.R`
+### Expected outputs
 
-## 目录结构
+Each model line writes two files with fixed shapes — useful for checking that a
+re-run was correct:
 
-```
-├── R/                   全部代码
-│   ├── 00_setup.R       装包 + 环境检查
-│   ├── 01_load.R        读数据
-│   ├── 02_eda.R         探索性分析
-│   ├── 03_features.R    特征工程（全组唯一真源）
-│   ├── 04_folds.R       ★ 折叠契约，冻结后不得重跑
-│   ├── 05_impute_L*.R   四条插补线
-│   ├── 06_model_*.R     ★ 每人一个文件，互不干扰
-│   ├── 07_ensemble.R    集成
-│   ├── 08_submit.R      生成提交文件
-│   ├── 09_*.R ~ 41_*.R  专项实验与 EDA（消融、校准、重复 CV、分辨率下限、
-│   │                    基础层描述性分析、缺失联合结构等，每个脚本自带用法注释）
-│   └── deck_figures.R   答辩用英文数据图
-├── data/raw/            原始数据（不进 git）
-├── output/              folds.rds 等契约产物
-├── paper/               论文全文（md + pdf）与论文图
-├── reports/figures/     13 张图表（300 dpi，可直接用于汇报）
-├── slides/              答辩幻灯片与逐页文案
-├── submissions/         提交记录 + log.csv 分数台账
-└── docs/                中文文档
-```
+| File | Length |
+|---|---|
+| `output/oof/oof_<name>.rds` | 691,369 (full-data out-of-fold predictions) |
+| `output/test/test_<name>.rds` | 296,302 (test-set predictions) |
+| `output/oof/oof_grid_<name>.rds` | 200,000 (comparison grid, 200k subsample) |
 
----
+`R/07_ensemble.R` picks up every `oof_*.rds` in the directory automatically, so
+adding a model requires no changes to existing code. `R/11_report.R` regenerates
+`output/results.md`, the machine-written table of every experimental number.
 
-## 协作规则（四条，请务必遵守）
+### Reproducibility caveat
 
-**1. `output/folds.rds` 冻结后任何人不得重新生成。**
-它是所有人分数可比的唯一基础。重跑一次，全组之前的实验结果全部作废。
-
-**2. 每人只改自己的 `R/06_model_<你的名字>.R`，不动别人的文件。**
-这样 10 个人同时 push 不会冲突，也不需要开分支。
-
-**3. 插补必须在每一折内部拟合。**
-在全训练集上拟合插补再套用会造成信息泄漏，CV 分数虚高。模板 `R/06_model_TEMPLATE.R` 已经把正确的循环结构写好了，照抄即可。
-
-**4. 逐取值 target encoding 同样必须在每一折内部拟合。**
-和插补是同一条纪律。在 CV 循环之外拟合编码器（哪怕用同一套折）也是泄漏——
-训练部分的每个样本都会被含验证折标签的统计量编码。框架已处理，`USE_TE=0` 可关闭。
-
----
-
-## 提交产物接口
-
-每条模型线产出两个文件，形状固定：
-
-| 文件 | 长度 | 说明 |
-|---|---|---|
-| `output/oof/oof_<名字>.rds` | 691,369 | 全量交叉验证预测 |
-| `output/test/test_<名字>.rds` | 296,302 | 测试集预测 |
-
-对比实验（200k 子集）另出 `output/oof/oof_grid_<名字>.rds`，长度 200,000。
-
-`07_ensemble.R` 自动读取目录下所有 `oof_*.rds`——**加模型不需要改任何已有代码**。
+`lightgbm` is not bit-for-bit reproducible across runs on this setup; the
+observed deviation is ~4×10⁻⁵ AUC, which is below the resolution floor of every
+comparison reported in the paper. `xgboost`, `ranger` and `glmnet` reproduce
+exactly given the frozen folds.
